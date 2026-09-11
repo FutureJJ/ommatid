@@ -44,6 +44,7 @@ CAM_TILT = float(os.environ.get("OMMATID_CAM_TILT", "275"))  # servo 22 pulse; 1
 PHASE2 = os.environ.get("OMMATID_PHASE", "1") == "2"         # apply per-servo leg targets from the brain (nerve cord → legs)
 STAND = os.environ.get("OMMATID_STAND", "0") == "1"          # robot on a stand: legs free, gait engine never used
 MAX_PULSE_STEP = int(os.environ.get("OMMATID_MAX_PULSE_STEP", "40"))   # per 100 ms, ≈ 10°: joint rate limit
+MAX_LEG_PULSE = int(os.environ.get("OMMATID_MAX_LEG_PULSE", "187"))     # max deviation from the standing pose, ≈ 45° (use ~62 ≈ 15° on the floor)
 LEG_IDS = set(range(1, 19))
 
 
@@ -65,7 +66,7 @@ class Body(Node):
         self.create_subscription(Imu, "/imu", self._on_imu, qos_profile_sensor_data)
         self.create_subscription(UInt16, "/ros_robot_controller/battery", self._on_batt, 5)
         self.create_subscription(ServoStateList, "/controller_manager/servo_states", self._on_servos, 5)
-        self.servos = {}; self.servo_ts = 0.0; self.omega = (0.0, 0.0, 0.0); self.leg_targets = {}
+        self.servos = {}; self.servo_ts = 0.0; self.omega = (0.0, 0.0, 0.0); self.leg_targets = {}; self.leg_rest = {}
         self.pub_vel = self.create_publisher(Twist, "/controller/cmd_vel", 5)
         self.pub_travel = self.create_publisher(Traveling, "/controller/traveling", 5)
         self.pub_servo = self.create_publisher(ServosPosition, "/servo_controller", 5)
@@ -91,6 +92,8 @@ class Body(Node):
         w = m.angular_velocity; self.omega = (math.degrees(w.x), math.degrees(w.y), math.degrees(w.z))
     def _on_servos(self, m):
         self.servos = {s.id: int(s.position) for s in m.servo_state if s.id in LEG_IDS}; self.servo_ts = time.time()
+        if not self.leg_rest and len(self.servos) == 18:
+            self.leg_rest = dict(self.servos)          # the pose the robot stood in when the agent started: the safety centre
     def _on_scan(self, m):
         """Front sector by angle: beams whose angle (relative to the configured straight-ahead) is within ±22.5°."""
         n = len(m.ranges)
@@ -164,7 +167,8 @@ class Body(Node):
                 "frames": self.stats["frames"], "lease_stops": self.stats["lease_stops"], "obstacle_blocks": self.stats["obstacle_blocks"],
                 "stale_cmds": self.stats["stale_cmds"], "moving": self.moving, "errors": self.stats["errors"],
                 "servos": {str(k): v for k, v in self.servos.items()} if PHASE2 else None, "servo_age_ms": round((time.time() - self.servo_ts) * 1000) if self.servo_ts else None,
-                "imu_omega_dps": [round(x, 1) for x in self.omega], "phase2": PHASE2, "stand": STAND,
+                "imu_omega_dps": [round(x, 1) for x in self.omega], "phase2": PHASE2, "stand": STAND, "leg_limits": {"max_pulse": MAX_LEG_PULSE, "step": MAX_PULSE_STEP},
+                "would_servos": self.stats.get("would_servos"),
                 "last_error": self.stats["last_error"], "post_ms": self.stats.get("post_ms"), "send_ms": self.stats.get("send_ms"), "encode_ms": self.stats.get("encode_ms"), "reconnects": self.stats.get("reconnects", 0), "cam_relaunches": self.stats.get("cam_relaunches", 0)}
         u = urlsplit(BRAIN_URL)
         if conn[0] is None:
@@ -217,7 +221,9 @@ class Body(Node):
             sid = int(k)
             if sid not in LEG_IDS: continue
             cur = self.leg_targets.get(sid, self.servos.get(sid, int(v)))
-            step = max(-MAX_PULSE_STEP, min(MAX_PULSE_STEP, int(v) - cur))
+            rest = self.leg_rest.get(sid, cur)
+            want = int(clamp(int(v), rest - MAX_LEG_PULSE, rest + MAX_LEG_PULSE))     # never far from the standing pose
+            step = max(-MAX_PULSE_STEP, min(MAX_PULSE_STEP, want - cur))
             targets[sid] = int(clamp(cur + step, 0, 1000))
         self.leg_targets.update(targets)
         self.stats["would_servos"] = targets
