@@ -139,3 +139,9 @@ not a response to expansion, and with the artefact removed the looming pathway i
 covers a fraction of one eye. Phase 1 v1 therefore establishes no reflex. This is now the stated status of the project.
 What v2 has to settle first: whether the hand-off gain (calibrated to HS-cell physiology, pre-registered) and a larger
 stimulus can drive LC4 at all; if not, that is the phase-1 result about this model class in this body.
+
+## Body released — 2026-09-11 13:38 UTC
+Dry run switched off (OMMATID_DRY_RUN=0). Free viewing, no protocol. First minute: the brain's steering asymmetry
+(DNa02 left 13–24 Hz, right 0 Hz) produced a slow left turn, yaw command 0.03–0.06 rad/s; heading −46° → +21° in ~25 s.
+DNa01 silent → no forward motion. Lease stops 0, obstacle blocks 0, link errors 0. LiDAR front sector verified against the
+camera before release (nearest object at 90° = the low table on the robot's left; 0° = ahead).
