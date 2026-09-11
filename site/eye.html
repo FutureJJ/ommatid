@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ommatid — eye</title>
+<style>
+html,body{margin:0;height:100%;background:#000;overflow:hidden}
+#cam{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;filter:grayscale(1) contrast(1.05);image-rendering:auto}
+#hud{position:absolute;left:18px;bottom:14px;font:12px/1.6 "JetBrains Mono",ui-monospace,monospace;color:#e9e6df;letter-spacing:.08em;text-transform:uppercase;text-shadow:0 1px 2px #000}
+#hud b{color:#e46a4f;font-weight:700}
+#hud i{display:inline-block;width:8px;height:8px;border-radius:50%;background:#c9321f;margin-right:8px;vertical-align:1px}
+.hidden{display:none}
+</style></head>
+<body>
+<img id="cam" alt="">
+<div id="hud"><i></i>what the fly sees · <b id="s">connecting</b></div>
+<script>
+// OBS browser source: https://ommatid.org/eye   (add ?hud=0 to hide the caption)
+const q = new URLSearchParams(location.search); if (q.get('hud') === '0') document.getElementById('hud').classList.add('hidden');
+const cam = document.getElementById('cam'); let live = false;
+function next(){ cam.src = '/frame.jpg?t=' + Date.now(); }
+cam.onload = () => setTimeout(next, 120); cam.onerror = () => setTimeout(next, 1000); next();
+function connect(){
+  const ws = new WebSocket('wss://' + location.host + '/telemetry');
+  ws.onmessage = e => { const s = JSON.parse(e.data); document.getElementById('s').textContent = s.seen === 'live' ? `live · step ${s.step} · ${s.spikes} spikes / 20 ms` : s.seen; };
+  ws.onclose = () => setTimeout(connect, 2000); ws.onerror = () => ws.close();
+}
+connect();
+</script>
+</body></html>

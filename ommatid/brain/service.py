@@ -201,6 +201,23 @@ def make_app(svc: BrainService, token: str) -> web.Application:
         with svc.lock: jpeg = svc.jpeg
         if not jpeg: raise web.HTTPNotFound()
         return web.Response(body=jpeg, content_type="image/jpeg", headers={"Cache-Control": "no-store"})
+    async def eye_mjpg(req):
+        """Continuous MJPEG stream of the camera frames the brain receives (for OBS Media Source / VLC)."""
+        resp = web.StreamResponse(status=200, headers={"Content-Type": "multipart/x-mixed-replace; boundary=frame",
+                                                       "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"})
+        await resp.prepare(req)
+        last = 0
+        try:
+            while True:
+                with svc.lock: seq, jpeg = svc.frame_seq, svc.jpeg
+                if seq != last and jpeg:
+                    last = seq
+                    await resp.write(b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: " + str(len(jpeg)).encode() + b"\r\n\r\n" + jpeg + b"\r\n")
+                await asyncio.sleep(0.05)
+        except (asyncio.CancelledError, ConnectionResetError):
+            pass
+        return resp
+
     async def groups(req):
         sc = svc.brain.superclass.astype(str)
         code = np.zeros(svc.brain.n, np.uint8)
@@ -258,7 +275,7 @@ def make_app(svc: BrainService, token: str) -> web.Application:
     async def stop_bg(app): app["bg"].cancel(); svc.log.flush(); svc.display_log.flush()
 
     app.add_routes([web.post("/body/frame", frame), web.get("/state.json", state), web.get("/health", health),
-                    web.get("/soma.bin", soma), web.get("/groups.bin", groups), web.get("/frame.jpg", frame_jpg),
+                    web.get("/soma.bin", soma), web.get("/groups.bin", groups), web.get("/frame.jpg", frame_jpg), web.get("/eye.mjpg", eye_mjpg),
                     web.get("/stimulus/state.json", stim_state), web.post("/protocol/start", protocol_start), web.post("/stimulus/ack", stim_ack),
                     web.post("/protocol/stop", protocol_stop), web.get("/protocol/status.json", protocol_status),
                     web.get("/telemetry", telemetry)])
