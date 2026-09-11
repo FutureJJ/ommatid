@@ -46,14 +46,17 @@ class Telemetry:
             self.hour = h
 
     def flush(self):
+        """One file per flush: no read-merge, so a schema difference between batches can never lose data or kill
+        the brain loop. The analysis globs the directory."""
         if not self.rows: return
-        import pyarrow as pa, pyarrow.parquet as pq
-        table = pa.Table.from_pylist(self.rows)
-        path = self.dir / f"steps-{self.hour}.parquet"
-        if path.exists():
-            table = pa.concat_tables([pq.read_table(path), table], promote_options="default")
-        pq.write_table(table, path)
-        self.rows = []; self.last_flush = time.time()
+        rows, self.rows = self.rows, []
+        self.last_flush = time.time()
+        try:
+            import pyarrow as pa, pyarrow.parquet as pq
+            path = self.dir / f"steps-{self.hour or time.strftime('%Y%m%d-%H', time.gmtime())}-{int(time.time()*1000)}.parquet"
+            pq.write_table(pa.Table.from_pylist(rows), path)
+        except Exception as e:                      # never let logging stop the brain
+            print(f"[telemetry] flush failed, {len(rows)} rows dropped: {e!r}", flush=True)
 
 
 class BrainService:
