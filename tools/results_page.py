@@ -15,6 +15,10 @@ COND_LABEL = {"loom": "looming disc", "disc": "static disc", "grating_R": "grati
 ORDER = ["loom", "disc", "grating_R", "grating_L", "bright_R", "bright_L", "grey"]
 
 
+def pfmt(p, rel=False):
+    return ('< 0.0001' if rel else '&lt; 0.0001') if p < 0.0001 else (('= ' if rel else '') + f'{p:.4f}')
+
+
 def svg_open(w, h): return [f'<svg viewBox="0 0 {w} {h}" width="100%" role="img" xmlns="http://www.w3.org/2000/svg" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="11">']
 def text(x, y, s, fill=INK2, anchor="start", size=11, weight="normal", italic=False):
     st = f' font-style="italic"' if italic else ""
@@ -131,7 +135,7 @@ figure{{margin:22px 0 8px;padding:14px 10px 6px;border:1px solid var(--line);bor
 table{{width:100%;border-collapse:collapse;font-size:15px;margin:16px 0}} th,td{{text-align:left;padding:9px 10px 9px 0;border-bottom:1px solid var(--line);color:var(--ink2);vertical-align:top}}
 th{{font-family:var(--mono);font-weight:500;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}} td:first-child{{color:var(--ink)}} td.n,th.n{{font-family:var(--mono);font-size:13px;text-align:right}}
 .verdict{{display:grid;grid-template-columns:1fr;gap:10px;margin:18px 0}} .verdict div{{border:1px solid var(--line);padding:14px 16px;border-radius:2px}}
-.verdict b{{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;display:block;margin-bottom:6px}} .met{{color:var(--eye)}} .notmet{{color:var(--ink3)}}
+.verdict > div > b{{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;display:block;margin-bottom:6px}} .verdict span b{{color:var(--ink);font-weight:500}} .met{{color:var(--eye)}} .notmet{{color:var(--ink3)}}
 .verdict span{{color:var(--ink2);font-size:16px}}
 footer{{border-top:1px solid var(--line);padding:22px 24px 40px;color:var(--ink3);font-size:14px}}
 </style></head><body>
@@ -142,8 +146,8 @@ footer{{border-top:1px solid var(--line);padding:22px 24px 40px;color:var(--ink3
 
 <h3>The pre-registered verdicts</h3>
 <div class="verdict">
-<div><b class="met">H2 looming — wiring specificity: met</b><span>Escape/stop descending neurons rose by <b>{lo_o.d_escape.mean():+.1f} Hz</b> during looming on the real wiring versus <b>{lo_s.d_escape.mean():+.1f} Hz</b> on shuffled wiring (permutation p = {p_wiring:.4f}; criterion p &lt; 0.01). The rise sits in DNp04 ({dnp04[0]:+.1f} to {dnp04[1]:+.1f} Hz, 95 % CI) and DNp02 ({dnp02[0]:+.1f} to {dnp02[1]:+.1f} Hz), the two direct targets of the LC4 looming detectors; the giant fibre, DNp09 and MDN stayed silent in every trial.</span></div>
-<div><b class="notmet">H2 looming — per-trial thresholds: narrowly missed</b><span>A rise &gt; 5 Hz appeared in {(lo_o.d_escape>5).mean()*100:.0f} % of loom trials (≥ 70 % required) and in {(ctl_o.d_escape>5).mean()*100:.0f} % of disc/grating controls (&lt; 20 % required); loom vs controls p = {p_loom_ctrl_o:.4f}. The static-disc control appears abruptly and is itself a looming-like event; v2 fades it in.</span></div>
+<div><b class="met">H2 looming — wiring specificity: met</b><span>Escape/stop descending neurons rose by <b>{lo_o.d_escape.mean():+.1f} Hz</b> during looming on the real wiring versus <b>{lo_s.d_escape.mean():+.1f} Hz</b> on shuffled wiring (permutation p = {pfmt(p_wiring)}; criterion p &lt; 0.01). The rise sits in DNp04 ({dnp04[0]:+.1f} to {dnp04[1]:+.1f} Hz, 95 % CI) and DNp02 ({dnp02[0]:+.1f} to {dnp02[1]:+.1f} Hz), the two direct targets of the LC4 looming detectors; the giant fibre, DNp09 and MDN stayed silent in every trial.</span></div>
+<div><b class="notmet">H2 looming — per-trial thresholds: narrowly missed</b><span>A rise &gt; 5 Hz appeared in {(lo_o.d_escape>5).mean()*100:.0f} % of loom trials (≥ 70 % required) and in {(ctl_o.d_escape>5).mean()*100:.0f} % of disc/grating controls (&lt; 20 % required); loom vs controls p {pfmt(p_loom_ctrl_o, True)}. The static-disc control appears abruptly and is itself a looming-like event; v2 fades it in.</span></div>
 <div><b class="notmet">H1 optomotor: not met</b><span>Steering asymmetry (DNa02 right − left) followed the grating direction in {h1_agree*100:.0f} % of trials (≥ 80 % required) and did not differ from the shuffled graph. The screen covers 41° of a ~300° visual field.</span></div>
 <div><b class="notmet">H3 phototaxis: not met</b><span>Turning toward the bright half in {h3_agree*100:.0f} % of trials; forward-walking neurons (DNa01) never fired in any condition.</span></div>
 </div>
