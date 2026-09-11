@@ -77,6 +77,18 @@ class Body(Node):
         self.create_timer(0.1, self._drive)
         self.last_cam_relaunch = 0.0
         self.create_timer(5.0, self._camera_watchdog)
+        self.create_timer(5.0, self._write_stats)
+
+    def _write_stats(self):
+        """Local status file, so the body can be debugged when no frames (and hence no telemetry) reach the brain."""
+        try:
+            import json as _json
+            with open("/tmp/ommatid_agent_stats.json", "w") as f:
+                _json.dump({"ts": time.time(), "rgb_age_s": round(time.time() - self.rgb_ts, 1) if self.rgb_ts else None,
+                            "scan_age_s": round(time.time() - self.scan_ts, 1) if self.scan_ts else None, "servos": len(self.servos),
+                            "dry_run": DRY_RUN, "phase2": PHASE2, **self.stats}, f)
+        except Exception as e:
+            self.stats["stats_error"] = str(e)[:80]
         self.next_send = time.time()
         for i in range(SENDERS):
             threading.Thread(target=self._sender, name=f"brain-sender-{i}", daemon=True).start()
@@ -121,9 +133,13 @@ class Body(Node):
         if now - self.last_cam_relaunch < 120.0:
             return
         self.last_cam_relaunch = now; self.stats["cam_relaunches"] = self.stats.get("cam_relaunches", 0) + 1
-        subprocess.Popen(["/bin/zsh", "-c", "pkill -f aurora930_node; sleep 2; source ~/.zshrc >/dev/null 2>&1; "
-                          "exec ros2 launch peripherals depth_camera.launch.py >> /tmp/depth_cam_relaunch.log 2>&1"],
-                         cwd=os.path.expanduser("~"))
+        try:
+            subprocess.Popen(["/bin/zsh", "-c", "pkill -f aurora930_nod[e]; sleep 2; source ~/.zshrc >/dev/null 2>&1; "
+                              "exec ros2 launch peripherals depth_camera.launch.py >> /tmp/depth_cam_relaunch.log 2>&1"],
+                             cwd=os.path.expanduser("~"), stdin=subprocess.DEVNULL)
+            with open("/tmp/depth_cam_relaunch.log", "a") as f: f.write(f"[watchdog] relaunch at {time.time():.0f}\n")
+        except Exception as e:
+            self.stats["cam_relaunch_error"] = str(e)[:100]
 
     def _aim_camera(self):
         m = ServosPosition(); m.duration = 1.0; m.position_unit = "pulse"
