@@ -72,6 +72,9 @@ class BrainService:
         self.log = Telemetry(Path(log_dir))
         self.lock = threading.Lock()
         self.frame = None; self.frame_ts = 0.0; self.frame_hash = ""; self.body = {}; self.jpeg = b""
+        self.frame_seq = 0                      # server-side count of frames received
+        self.display = []                       # what the stimulus page reported showing: (server_ts, spec)
+        self.display_log = Telemetry(Path(log_dir) / "display")
         sc = self.brain.superclass
         self.groups = {"optic lobe": np.char.startswith(sc.astype(str), "ol_") | (sc == "visual_projection") | (sc == "visual_centrifugal"),
                        "central brain": np.char.startswith(sc.astype(str), "cb_"),
@@ -101,8 +104,16 @@ class BrainService:
         gray = np.asarray(img, np.float32) / 255.0
         with self.lock:
             self.frame = gray; self.frame_ts = time.time(); self.body = body; self.jpeg = jpeg
-            self.frame_hash = hashlib.sha1(jpeg).hexdigest()[:10]
+            self.frame_seq += 1; self.frame_hash = hashlib.sha1(jpeg).hexdigest()[:10]
             return dict(self.command)
+
+    def ack_display(self, spec: dict):
+        """The stimulus page reports what it put on screen and when (its own clock); we stamp server time too."""
+        ev = {"server_ts": time.time(), "client_ts": spec.get("client_ts"), "kind": spec.get("kind"), "trial": spec.get("trial"),
+              "condition": spec.get("condition"), "phase": spec.get("phase"), "t_brain_ms": spec.get("t_brain_ms")}
+        with self.lock:
+            self.display.append(ev); self.display = self.display[-5000:]
+        self.display_log.add(ev)
 
     # ---- the loop -----------------------------------------------------------------
     def _loop(self):
@@ -110,8 +121,9 @@ class BrainService:
         while self.running:
             t0 = time.perf_counter()
             with self.lock:
-                frame, fts, fhash, body = self.frame, self.frame_ts, self.frame_hash, dict(self.body)
-            stale = frame is None or (time.time() - fts) > STALE_S
+                frame, fts, fhash, body, fseq = self.frame, self.frame_ts, self.frame_hash, dict(self.body), self.frame_seq
+            frame_age = (time.time() - fts) if frame is not None else None
+            stale = frame is None or frame_age > STALE_S
             if self.mode == "blind" or stale:
                 drive = {}; seen = "blind" if self.mode == "blind" else "no-frame"
                 act = None
@@ -143,7 +155,9 @@ class BrainService:
                 f = r["fired"]
                 self.fired_sample = f if len(f) <= 3000 else np.random.default_rng(cmd["step"]).choice(f, 3000, replace=False)
             self.log.add({"ts": cmd["ts"], "step": cmd["step"], "brain_ms": self.brain.t_ms, "wall_ms": wall * 1000,
-                          "seen": seen, "frame_hash": fhash, "spikes": r["total"], "fired": int(len(r["fired"])),
+                          "seen": seen, "frame_hash": fhash, "frame_seq": fseq, "frame_recv_ts": fts if frame is not None else None,
+                          "frame_age_ms": round(frame_age * 1000, 1) if frame_age is not None else None,
+                          "spikes": r["total"], "fired": int(len(r["fired"])),
                           **{f"hz_{k}": v for k, v in hz.items()}, "cmd_linear": cmd["linear_mps"], "cmd_yaw": cmd["yaw_rps"],
                           "cmd_stop": cmd["stop"], "stim_kind": stim.get("kind"), "stim_trial": stim.get("trial"),
                           "stim_condition": stim.get("condition"), "stim_phase": stim.get("phase"),
@@ -197,6 +211,12 @@ def make_app(svc: BrainService, token: str) -> web.Application:
         st["server_ts"] = time.time()
         return web.json_response(st, headers={"Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"})
 
+    async def stim_ack(req):
+        try: spec = await req.json()
+        except Exception: raise web.HTTPBadRequest()
+        svc.ack_display(spec if isinstance(spec, dict) else {})
+        return web.json_response({"ok": True}, headers={"Access-Control-Allow-Origin": "*"})
+
     async def protocol_start(req):
         if token and req.headers.get("Authorization") != f"Bearer {token}": raise web.HTTPUnauthorized()
         q = await req.json() if req.can_read_body else {}
@@ -231,11 +251,11 @@ def make_app(svc: BrainService, token: str) -> web.Application:
                     except Exception: clients.discard(ws)
 
     async def start_bg(app): app["bg"] = asyncio.create_task(broadcaster(app))
-    async def stop_bg(app): app["bg"].cancel(); svc.log.flush()
+    async def stop_bg(app): app["bg"].cancel(); svc.log.flush(); svc.display_log.flush()
 
     app.add_routes([web.post("/body/frame", frame), web.get("/state.json", state), web.get("/health", health),
                     web.get("/soma.bin", soma), web.get("/groups.bin", groups), web.get("/frame.jpg", frame_jpg),
-                    web.get("/stimulus/state.json", stim_state), web.post("/protocol/start", protocol_start),
+                    web.get("/stimulus/state.json", stim_state), web.post("/protocol/start", protocol_start), web.post("/stimulus/ack", stim_ack),
                     web.post("/protocol/stop", protocol_stop), web.get("/protocol/status.json", protocol_status),
                     web.get("/telemetry", telemetry)])
     app.on_startup.append(start_bg); app.on_cleanup.append(stop_bg)

@@ -1,35 +1,45 @@
 #!/usr/bin/env python3
 """Ommatid body agent. Runs inside the `rospider` container on the Raspberry Pi (ROS 2 Humble, Python 3.10).
 
-Every ~100 ms: grab the latest camera frame, shrink it to grey 320x200 JPEG, POST it to the brain with the body's
-telemetry, receive the current command and publish it as /controller/cmd_vel. Reflexes the brain cannot override:
-  - watchdog: no fresh command for 500 ms → stop
-  - LiDAR: anything closer than the stop distance in the front sector → no forward motion
-  - battery below the floor → stop
-The stock Hiwonder stack does the gait; this only tells it how fast to go and turn.
+A sender thread posts the latest camera frame (grey 320x200 JPEG) to the brain about 10 times a second, with the
+body's telemetry and the frame's capture time, and receives the brain's current command. The ROS side never waits
+on the network: sensor callbacks, the drive timer and the watchdog run on their own.
+
+Reflexes the brain cannot override:
+  - lease: motion is allowed only while commands keep arriving with an ADVANCING brain step; if no newer step has
+    arrived for LEASE_S the body halts (a stalled brain that still answers HTTP cannot keep an old command alive)
+  - LiDAR: anything closer than OBSTACLE_STOP_M within ±FRONT_HALF_ANGLE of straight ahead blocks forward motion;
+    the sector is selected by scan angle, not by array position
+  - battery below the floor → no motion
+  - sensor freshness: no LiDAR scan for 1 s → no forward motion
+The stock Hiwonder stack does the gait; this only tells it how fast to go and turn. A zero Twist is NOT a stop for
+that stack (it steps in place), so idling publishes nothing and stopping sends an explicit Traveling gait=0.
 """
 from __future__ import annotations
-import json, math, os, sys, threading, time, urllib.request
+import json, math, os, threading, time, urllib.request
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from geometry_msgs.msg import Twist
-from kinematics_msgs.msg import Traveling
-from servo_controller_msgs.msg import ServoPosition, ServosPosition
-from interfaces.msg import RunActionSet
 from sensor_msgs.msg import Image, Imu, LaserScan
 from std_msgs.msg import UInt16
+from kinematics_msgs.msg import Traveling
+from interfaces.msg import RunActionSet
+from servo_controller_msgs.msg import ServoPosition, ServosPosition
 
 BRAIN_URL = os.environ.get("OMMATID_BRAIN_URL", "https://ommatid.org/body/frame")
 TOKEN = os.environ.get("OMMATID_TOKEN", "")
 PERIOD_S = float(os.environ.get("OMMATID_PERIOD_S", "0.1"))
-WATCHDOG_S = 0.5
+LEASE_S = 0.5                 # motion lease: newest advancing command must be younger than this
+SCAN_FRESH_S = 1.0
 OBSTACLE_STOP_M = 0.20
+FRONT_HALF_ANGLE = math.radians(22.5)
+FRONT_ANGLE_OFFSET = float(os.environ.get("OMMATID_LIDAR_FRONT_RAD", "0.0"))   # angle (rad) of straight-ahead in the scan frame
 BATTERY_FLOOR_V = 10.3
-MAX_LINEAR = 0.08       # m/s, stock clamp is 0.12
-MAX_YAW = 0.5           # rad/s, stock clamp is 0.6
-DRY_RUN = os.environ.get("OMMATID_DRY_RUN", "1") == "1"   # 1: talk to the brain but publish zero velocity
-CAM_TILT = float(os.environ.get("OMMATID_CAM_TILT", "275"))  # arm joint 4 (servo 22) pulse; 150 = floor, 275 ≈ 30° up = room
+MAX_LINEAR = 0.08             # m/s, stock clamp is 0.12
+MAX_YAW = 0.5                 # rad/s, stock clamp is 0.6
+DRY_RUN = os.environ.get("OMMATID_DRY_RUN", "1") == "1"      # 1: talk to the brain but never move
+CAM_TILT = float(os.environ.get("OMMATID_CAM_TILT", "275"))  # servo 22 pulse; 150 = floor, 275 ≈ 30° up = room
 
 
 def clamp(v, lo, hi): return max(lo, min(hi, v))
@@ -39,10 +49,11 @@ class Body(Node):
     def __init__(self):
         super().__init__("ommatid_body")
         self.lock = threading.Lock()
-        self.rgb = None; self.rgb_ts = 0.0
-        self.battery_v = None; self.yaw = None; self.scan_front = None
-        self.cmd = None; self.cmd_ts = 0.0
-        self.stats = {"frames": 0, "errors": 0, "watchdog_stops": 0, "obstacle_blocks": 0, "last_error": ""}
+        self.rgb = None; self.rgb_ts = 0.0; self.rgb_stamp = 0.0
+        self.battery_v = None; self.yaw = None
+        self.scan_front = None; self.scan_ts = 0.0; self.scan_meta = None
+        self.cmd = None; self.cmd_recv_ts = 0.0; self.last_step = -1; self.lease_ts = 0.0
+        self.stats = {"frames": 0, "errors": 0, "lease_stops": 0, "obstacle_blocks": 0, "stale_cmds": 0, "last_error": ""}
         self.create_subscription(Image, "/depth_cam/rgb/image_raw", self._on_rgb, qos_profile_sensor_data)
         self.create_subscription(LaserScan, "/scan", self._on_scan, qos_profile_sensor_data)
         self.create_subscription(Imu, "/imu", self._on_imu, qos_profile_sensor_data)
@@ -52,29 +63,39 @@ class Body(Node):
         self.pub_action = self.create_publisher(RunActionSet, "/controller/run_actionset", 5)
         self.pub_servo = self.create_publisher(ServosPosition, "/servo_controller", 5)
         self.moving = False
-        self._halt()   # make sure the gait engine is idle at start
+        self._halt()
         self._cam_timer = self.create_timer(2.0, self._aim_camera_once)
-
-    def _aim_camera_once(self):
-        """Tilt the camera to look at the room rather than the floor (the stock rest pose looks down)."""
-        m = ServosPosition(); m.duration = 1.0; m.position_unit = "pulse"
-        m.position = [ServoPosition(id=22, position=float(clamp(CAM_TILT, 0, 1000)))]
-        self.pub_servo.publish(m)
-        self.destroy_timer(self._cam_timer) if hasattr(self, "_cam_timer") else None
-        self.stats["cam_tilt"] = CAM_TILT
-        self.create_timer(PERIOD_S, self._tick)
         self.create_timer(0.1, self._drive)
+        threading.Thread(target=self._sender, name="brain-sender", daemon=True).start()
 
-    def _on_rgb(self, m): self.rgb, self.rgb_ts = m, time.time()
+    # ---- sensors ----------------------------------------------------------------
+    def _on_rgb(self, m):
+        self.rgb, self.rgb_ts = m, time.time()
+        self.rgb_stamp = m.header.stamp.sec + m.header.stamp.nanosec * 1e-9
     def _on_batt(self, m): self.battery_v = m.data / 1000.0
     def _on_imu(self, m):
         q = m.orientation
         self.yaw = math.degrees(math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z)))
     def _on_scan(self, m):
-        r = list(m.ranges); n = len(r)
-        front = [x for x in r[: n // 8] + r[-n // 8:] if x and 0.05 < x < 12.0]
+        """Front sector by angle: beams whose angle (relative to the configured straight-ahead) is within ±22.5°."""
+        n = len(m.ranges)
+        front = []
+        for i, r in enumerate(m.ranges):
+            if not (r and 0.05 < r < 12.0): continue
+            a = m.angle_min + i * m.angle_increment - FRONT_ANGLE_OFFSET
+            a = (a + math.pi) % (2 * math.pi) - math.pi
+            if abs(a) <= FRONT_HALF_ANGLE: front.append(r)
         self.scan_front = min(front) if front else None
+        self.scan_ts = time.time()
+        self.scan_meta = {"angle_min": round(m.angle_min, 3), "angle_max": round(m.angle_max, 3), "n": n, "front_beams": len(front)}
 
+    def _aim_camera_once(self):
+        m = ServosPosition(); m.duration = 1.0; m.position_unit = "pulse"
+        m.position = [ServoPosition(id=22, position=float(clamp(CAM_TILT, 0, 1000)))]
+        self.pub_servo.publish(m); self.stats["cam_tilt"] = CAM_TILT
+        self.destroy_timer(self._cam_timer)
+
+    # ---- brain link (own thread) -----------------------------------------------
     def _jpeg(self):
         import cv2, numpy as np
         m = self.rgb
@@ -85,27 +106,41 @@ class Body(Node):
         ok, buf = cv2.imencode(".jpg", gray, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
         return buf.tobytes() if ok else None
 
-    def _tick(self):
+    def _sender(self):
+        while rclpy.ok():
+            t0 = time.time()
+            try:
+                self._send_once()
+            except Exception as e:
+                self.stats["errors"] += 1; self.stats["last_error"] = str(e)[:120]
+            time.sleep(max(0.0, PERIOD_S - (time.time() - t0)))
+
+    def _send_once(self):
         jpeg = self._jpeg()
         if jpeg is None or time.time() - self.rgb_ts > 1.0:
             return
-        tele = {"ts": time.time(), "dry_run": DRY_RUN, "battery_v": self.battery_v, "yaw_deg": self.yaw, "lidar_front_m": self.scan_front,
-                "frames": self.stats["frames"], "watchdog_stops": self.stats["watchdog_stops"],
-                "obstacle_blocks": self.stats["obstacle_blocks"]}
+        tele = {"ts": time.time(), "capture_ts": self.rgb_stamp, "capture_age_ms": round((time.time() - self.rgb_ts) * 1000, 1),
+                "dry_run": DRY_RUN, "battery_v": self.battery_v, "yaw_deg": self.yaw, "lidar_front_m": self.scan_front,
+                "lidar_age_ms": round((time.time() - self.scan_ts) * 1000) if self.scan_ts else None, "lidar": self.scan_meta,
+                "frames": self.stats["frames"], "lease_stops": self.stats["lease_stops"], "obstacle_blocks": self.stats["obstacle_blocks"],
+                "stale_cmds": self.stats["stale_cmds"], "moving": self.moving}
         req = urllib.request.Request(BRAIN_URL, data=jpeg, method="POST",
                                      headers={"Content-Type": "image/jpeg", "Authorization": f"Bearer {TOKEN}",
-                                              "User-Agent": "Ommatid-Body/0.1", "X-Ommatid-Telemetry": json.dumps(tele)})
-        try:
-            with urllib.request.urlopen(req, timeout=1.5) as resp:
-                cmd = json.loads(resp.read())
-            with self.lock:
-                self.cmd, self.cmd_ts = cmd, time.time()
-            self.stats["frames"] += 1
-        except Exception as e:
-            self.stats["errors"] += 1; self.stats["last_error"] = str(e)[:120]
+                                              "User-Agent": "Ommatid-Body/0.2", "X-Ommatid-Telemetry": json.dumps(tele)})
+        with urllib.request.urlopen(req, timeout=1.5) as resp:
+            cmd = json.loads(resp.read())
+        now = time.time()
+        with self.lock:
+            step = int(cmd.get("step", -1))
+            if step > self.last_step:                 # only an ADVANCING brain step renews the motion lease
+                self.last_step = step; self.lease_ts = now; self.cmd = cmd
+            else:
+                self.stats["stale_cmds"] += 1
+            self.cmd_recv_ts = now
+        self.stats["frames"] += 1
 
+    # ---- motion (ROS timer, never blocks) ----------------------------------------
     def _halt(self):
-        """Stop the gait engine for real: a zero Twist is NOT a stop for the stock controller (it steps in place)."""
         m = Traveling(); m.gait = 0; m.interrupt = True
         self.pub_travel.publish(m)
         a = RunActionSet(); a.action_path = "stop"
@@ -113,19 +148,21 @@ class Body(Node):
         self.moving = False
 
     def _drive(self):
+        now = time.time()
         with self.lock:
-            cmd, ts = self.cmd, self.cmd_ts
+            cmd, lease_ts = self.cmd, self.lease_ts
         lin = yaw = 0.0
-        if cmd is None or time.time() - ts > WATCHDOG_S:
-            if cmd is not None: self.stats["watchdog_stops"] += 1
+        if cmd is None or now - lease_ts > LEASE_S:
+            if cmd is not None and self.moving: self.stats["lease_stops"] += 1
         elif not cmd.get("stop") and (self.battery_v is None or self.battery_v >= BATTERY_FLOOR_V):
             lin = clamp(float(cmd.get("linear_mps", 0.0)), -MAX_LINEAR, MAX_LINEAR)
             yaw = clamp(float(cmd.get("yaw_rps", 0.0)), -MAX_YAW, MAX_YAW)
-            if lin > 0 and self.scan_front is not None and self.scan_front < OBSTACLE_STOP_M:
+            scan_fresh = (now - self.scan_ts) < SCAN_FRESH_S
+            if lin > 0 and (not scan_fresh or self.scan_front is None or self.scan_front < OBSTACLE_STOP_M):
                 lin = 0.0; self.stats["obstacle_blocks"] += 1
             self.stats["would"] = {"linear": round(lin, 3), "yaw": round(yaw, 3)}
-        want_motion = (not DRY_RUN) and (abs(lin) > 0.005 or abs(yaw) > 0.02)
-        if want_motion:
+        want = (not DRY_RUN) and (abs(lin) > 0.005 or abs(yaw) > 0.02)
+        if want:
             t = Twist(); t.linear.x = lin; t.angular.z = yaw
             self.pub_vel.publish(t); self.moving = True
         elif self.moving:

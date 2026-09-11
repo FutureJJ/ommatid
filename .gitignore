@@ -1,9 +1,9 @@
 .venv/
-data/
-build/
+/data/
+/build/
 __pycache__/
 *.pyc
 .env
 *.log
 .token.local
-logs/
+/logs/
