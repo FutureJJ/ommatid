@@ -25,6 +25,8 @@ from .eye import Eye
 from .optic_lobe import OpticLobe, ColumnMap
 from .readout import Readout, Gains
 from .protocol import Protocol
+from .motor import LegMotor, MotorGains
+from .proprio import Proprioception
 
 ROOT = Path(__file__).resolve().parents[2]
 STEPS = 100                     # 100 × 0.2 ms = 20 ms brain time per control step
@@ -88,6 +90,17 @@ class BrainService:
                       "columns_sha": self.cmap.sha, "columns_from_graph": self.cmap.source_graph_sha, "hz_per_unit": hz}
         self.fired_sample = np.zeros(0, np.int32)
         self.protocol = Protocol(trials_per_condition=0)
+        # phase 2: the nerve cord drives and feels the legs
+        self.phase = int(os.environ.get("OMMATID_PHASE", "1"))
+        self.motor = self.proprio = None
+        if self.phase >= 2:
+            import pandas as pd
+            ann = pd.read_feather(ROOT / "data/body-annotations.feather")
+            self.motor = LegMotor(self.brain, ann, MotorGains())
+            zs = np.load(ROOT / "build/sensory_sides.npz", allow_pickle=False)
+            self.proprio = Proprioception(self.brain, ann, {int(i): str(x) for i, x in zip(zs["idx"], zs["side"])})
+            self.state["phase2"] = {"motor_neurons": int(len(self.motor.all_idx)), "proprioceptors": self.proprio.describe()}
+        self.last_servo_cmd = {}
         self.stim = {"kind": "grey", "trial": None, "phase": "idle", "condition": None}
         self.running = True
         threading.Thread(target=self._loop, name="brain-loop", daemon=True).start()
@@ -131,6 +144,11 @@ class BrainService:
                 act = None
             else:
                 act = self.ol.see(frame); drive = self.cmap.drive(self.ol.rates(act)); seen = "live"
+            if self.proprio is not None and body.get("servos"):
+                reached = {int(k): int(v) for k, v in body["servos"].items()}
+                joints = LegMotor.joints_from_positions(reached, self.last_servo_cmd, self.motor.g)
+                omega = body.get("imu_omega_dps") or (0.0, 0.0, 0.0)
+                drive = {**drive, **self.proprio.drive(joints, STEPS * self.brain.p.dt, omega)}
             t1 = time.perf_counter()
             r = self.brain.run(drive, STEPS)
             t2 = time.perf_counter()
@@ -138,6 +156,12 @@ class BrainService:
             cmd = self.ro.command()          # smoothed over ~200 ms of brain time
             if seen != "live":
                 cmd.update(stop=True, linear_mps=0.0, yaw_rps=0.0)
+            if self.motor is not None:
+                mo = self.motor.update(r["counts"], r["secs"])
+                cmd["servos"] = {str(k): int(v) for k, v in mo["pulses"].items()}
+                cmd["phase"] = 2
+                self.last_servo_cmd = mo["pulses"]
+                pool_hz = mo["rates"]
             cmd["reason"] = seen; cmd["step"] = self.state["step"] + 1; cmd["ts"] = time.time()
             wall = time.perf_counter() - t0
             dil = wall / (STEPS * self.brain.p.dt / 1000)
@@ -152,6 +176,7 @@ class BrainService:
                                   rates=hz, smoothed={k: round(v, 1) for k, v in self.ro.smoothed.items()}, command=cmd, frame_hash=fhash, body=body,
                                   drive_cells=int(sum(len(k) for k in drive)) if drive else 0,
                                   stim={k: stim.get(k) for k in ("kind", "trial", "condition", "phase")},
+                                  pools=({f"{l}-{sd}-{j}": [round(a, 1), round(b, 1)] for (l, sd, j), (a, b) in pool_hz.items()} if self.motor is not None else None),
                                   active={k: int(r["counts"][m].astype(bool).sum()) for k, m in self.groups.items()},
                                   totals={k: int(m.sum()) for k, m in self.groups.items()})
                 f = r["fired"]
@@ -164,6 +189,8 @@ class BrainService:
                           "cmd_stop": cmd["stop"], "stim_kind": stim.get("kind"), "stim_trial": stim.get("trial"),
                           "stim_condition": stim.get("condition"), "stim_phase": stim.get("phase"), "protocol_version": stim.get("version"),
                           "stim_t_ms": stim.get("t_brain_ms"), "protocol_seed": self.protocol.seed if self.protocol.active else None,
+                          **({f"pool_{l}_{sd}_{j}_{w}": v for (l, sd, j), (a, b) in pool_hz.items() for w, v in (("ago", a), ("ant", b))} if self.motor is not None else {}),
+                          **({f"servo_{k}": v for k, v in self.last_servo_cmd.items()} if self.motor is not None else {}),
                           **{f"body_{k}": v for k, v in body.items() if isinstance(v, (int, float, str, bool))}})
 
     def snapshot(self) -> dict:

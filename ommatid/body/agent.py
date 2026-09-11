@@ -25,7 +25,7 @@ from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Image, Imu, LaserScan
 from std_msgs.msg import UInt16
 from kinematics_msgs.msg import Traveling
-from servo_controller_msgs.msg import ServoPosition, ServosPosition
+from servo_controller_msgs.msg import ServoPosition, ServosPosition, ServoStateList
 
 BRAIN_URL = os.environ.get("OMMATID_BRAIN_URL", "https://ommatid.org/body/frame")
 TOKEN = os.environ.get("OMMATID_TOKEN", "")
@@ -41,6 +41,10 @@ MAX_LINEAR = 0.08             # m/s, stock clamp is 0.12
 MAX_YAW = 0.5                 # rad/s, stock clamp is 0.6
 DRY_RUN = os.environ.get("OMMATID_DRY_RUN", "1") == "1"      # 1: talk to the brain but never move
 CAM_TILT = float(os.environ.get("OMMATID_CAM_TILT", "275"))  # servo 22 pulse; 150 = floor, 275 ≈ 30° up = room
+PHASE2 = os.environ.get("OMMATID_PHASE", "1") == "2"         # apply per-servo leg targets from the brain (nerve cord → legs)
+STAND = os.environ.get("OMMATID_STAND", "0") == "1"          # robot on a stand: legs free, gait engine never used
+MAX_PULSE_STEP = int(os.environ.get("OMMATID_MAX_PULSE_STEP", "40"))   # per 100 ms, ≈ 10°: joint rate limit
+LEG_IDS = set(range(1, 19))
 
 
 def clamp(v, lo, hi): return max(lo, min(hi, v))
@@ -60,6 +64,8 @@ class Body(Node):
         self.create_subscription(LaserScan, "/scan", self._on_scan, qos_profile_sensor_data)
         self.create_subscription(Imu, "/imu", self._on_imu, qos_profile_sensor_data)
         self.create_subscription(UInt16, "/ros_robot_controller/battery", self._on_batt, 5)
+        self.create_subscription(ServoStateList, "/controller_manager/servo_states", self._on_servos, 5)
+        self.servos = {}; self.servo_ts = 0.0; self.omega = (0.0, 0.0, 0.0); self.leg_targets = {}
         self.pub_vel = self.create_publisher(Twist, "/controller/cmd_vel", 5)
         self.pub_travel = self.create_publisher(Traveling, "/controller/traveling", 5)
         self.pub_servo = self.create_publisher(ServosPosition, "/servo_controller", 5)
@@ -82,6 +88,9 @@ class Body(Node):
     def _on_imu(self, m):
         q = m.orientation
         self.yaw = math.degrees(math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z)))
+        w = m.angular_velocity; self.omega = (math.degrees(w.x), math.degrees(w.y), math.degrees(w.z))
+    def _on_servos(self, m):
+        self.servos = {s.id: int(s.position) for s in m.servo_state if s.id in LEG_IDS}; self.servo_ts = time.time()
     def _on_scan(self, m):
         """Front sector by angle: beams whose angle (relative to the configured straight-ahead) is within ±22.5°."""
         n = len(m.ranges)
@@ -154,6 +163,8 @@ class Body(Node):
                 "lidar_age_ms": round((time.time() - self.scan_ts) * 1000) if self.scan_ts else None, "lidar": self.scan_meta,
                 "frames": self.stats["frames"], "lease_stops": self.stats["lease_stops"], "obstacle_blocks": self.stats["obstacle_blocks"],
                 "stale_cmds": self.stats["stale_cmds"], "moving": self.moving, "errors": self.stats["errors"],
+                "servos": {str(k): v for k, v in self.servos.items()} if PHASE2 else None, "servo_age_ms": round((time.time() - self.servo_ts) * 1000) if self.servo_ts else None,
+                "imu_omega_dps": [round(x, 1) for x in self.omega], "phase2": PHASE2, "stand": STAND,
                 "last_error": self.stats["last_error"], "post_ms": self.stats.get("post_ms"), "send_ms": self.stats.get("send_ms"), "encode_ms": self.stats.get("encode_ms"), "reconnects": self.stats.get("reconnects", 0), "cam_relaunches": self.stats.get("cam_relaunches", 0)}
         u = urlsplit(BRAIN_URL)
         if conn[0] is None:
@@ -194,10 +205,34 @@ class Body(Node):
         self.pub_travel.publish(m)
         self.moving = False
 
+    def _drive_legs(self, cmd, lease_age):
+        """Phase 2: the brain's per-servo targets go to the legs, rate-limited, only while the lease is fresh and the
+        battery is above the floor. In dry run nothing moves; the would-be targets are reported."""
+        if cmd is None or lease_age > LEASE_S or not cmd.get("servos"):
+            return
+        if self.battery_v is not None and self.battery_v < BATTERY_FLOOR_V:
+            return
+        targets = {}
+        for k, v in cmd["servos"].items():
+            sid = int(k)
+            if sid not in LEG_IDS: continue
+            cur = self.leg_targets.get(sid, self.servos.get(sid, int(v)))
+            step = max(-MAX_PULSE_STEP, min(MAX_PULSE_STEP, int(v) - cur))
+            targets[sid] = int(clamp(cur + step, 0, 1000))
+        self.leg_targets.update(targets)
+        self.stats["would_servos"] = targets
+        if DRY_RUN or not targets:
+            return
+        m = ServosPosition(); m.duration = 0.1; m.position_unit = "pulse"
+        m.position = [ServoPosition(id=sid, position=float(p)) for sid, p in targets.items()]
+        self.pub_servo.publish(m); self.moving = True
+
     def _drive(self):
         now = time.time()
         with self.lock:
             cmd, lease_ts = self.cmd, self.lease_ts
+        if PHASE2:
+            self._drive_legs(cmd, now - lease_ts if cmd else 1e9); return
         lin = yaw = 0.0
         if cmd is None or now - lease_ts > LEASE_S:
             if cmd is not None and self.moving: self.stats["lease_stops"] += 1

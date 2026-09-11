@@ -27,19 +27,24 @@ POOLS = {
               "ant": ["Ti extensor MN"]},
 }
 
-# Hiwonder RoSpider bus-servo ids: legs numbered 1..18; layout per leg (coxa, femur, tibia). Verified against the stock
-# kinematics config before trials; until then this table is the working assumption and is checked by tools/servo_map.py.
+# Hiwonder RoSpider bus-servo ids per leg (coxa, femur, tibia), read from the stock
+# driver/servo_controller/config/servo_controller.yaml on 2026-09-11 (LF/LM/LR = left front/mid/rear, RF/RM/RR = right).
 SERVO_IDS = {
-    ("front", "R"): (1, 2, 3), ("mid", "R"): (4, 5, 6), ("hind", "R"): (7, 8, 9),
-    ("front", "L"): (10, 11, 12), ("mid", "L"): (13, 14, 15), ("hind", "L"): (16, 17, 18),
+    ("front", "L"): (5, 3, 1), ("mid", "L"): (11, 9, 7), ("hind", "L"): (17, 15, 13),
+    ("front", "R"): (6, 4, 2), ("mid", "R"): (12, 10, 8), ("hind", "R"): (18, 16, 14),
 }
+# Standing pose read from /controller_manager/servo_states with the robot on its feet (2026-09-11): the rest pulse per
+# servo. Left and right are mirror images (femur 320 ↔ 680, tibia 660 ↔ 340), so a positive joint angle means the
+# same anatomical movement on both sides when the pulse sign is flipped for the right legs (SIDE_SIGN).
+REST_PULSE = {5: 470, 3: 320, 1: 660, 11: 500, 9: 320, 7: 660, 17: 530, 15: 320, 13: 660,
+              6: 530, 4: 680, 2: 340, 12: 500, 10: 680, 8: 340, 18: 470, 16: 680, 14: 340}
+SIDE_SIGN = {"L": +1.0, "R": -1.0}
 
 
 @dataclass(frozen=True)
 class MotorGains:
     deg_per_hz: dict = field(default_factory=lambda: {"coxa": 0.6, "femur": 0.8, "tibia": 0.8})
     smooth_ms: float = 50.0
-    rest_pulse: int = 500                 # bus servo centre (0..1000 ≙ 0..240°)
     pulse_per_deg: float = 1000.0 / 240.0
     range_deg: dict = field(default_factory=lambda: {"coxa": 35.0, "femur": 45.0, "tibia": 45.0})   # ± from rest
 
@@ -62,6 +67,20 @@ class LegMotor:
         self.smoothed = np.zeros((len(self.units), 2), np.float32)   # per unit: ago rate, ant rate (Hz)
         self.all_idx = np.unique(np.concatenate([np.concatenate([u[3], u[4]]) for u in self.units]))
 
+    @staticmethod
+    def joints_from_positions(reached: dict, commanded: dict, gains: "MotorGains") -> dict:
+        """Servo pulses → {(leg, side): {joint: (θ_cmd_deg, θ_reached_deg, range_deg)}} relative to the standing pose,
+        for the proprioception model."""
+        out = {}
+        for (leg, s), ids in SERVO_IDS.items():
+            d = {}
+            for joint, sid in zip(("coxa", "femur", "tibia"), ids):
+                if sid not in reached: continue
+                to_deg = lambda p: SIDE_SIGN[s] * (p - REST_PULSE[sid]) / gains.pulse_per_deg
+                d[joint] = (to_deg(commanded.get(sid, reached[sid])), to_deg(reached[sid]), gains.range_deg[joint])
+            if d: out[(leg, s)] = d
+        return out
+
     def describe(self) -> pd.DataFrame:
         return pd.DataFrame([{"leg": l, "side": s, "joint": j, "agonist_n": len(a), "antagonist_n": len(b), "servo": SERVO_IDS[(l, s)][["coxa", "femur", "tibia"].index(j)]}
                              for l, s, j, a, b in self.units])
@@ -77,6 +96,6 @@ class LegMotor:
             deg = self.g.deg_per_hz[joint] * (self.smoothed[k, 0] - self.smoothed[k, 1])
             deg = float(np.clip(deg, -self.g.range_deg[joint], self.g.range_deg[joint]))
             sid = SERVO_IDS[(leg, s)][["coxa", "femur", "tibia"].index(joint)]
-            targets[sid] = int(round(self.g.rest_pulse + deg * self.g.pulse_per_deg))
+            targets[sid] = int(np.clip(round(REST_PULSE[sid] + SIDE_SIGN[s] * deg * self.g.pulse_per_deg), 0, 1000))
             rates[(leg, s, joint)] = (float(self.smoothed[k, 0]), float(self.smoothed[k, 1]))
         return {"pulses": targets, "rates": rates}
