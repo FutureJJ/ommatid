@@ -17,6 +17,12 @@ CNS v1.0 (brain + ventral nerve cord, untrained spiking model after Shiu et al. 
 a six-legged robot with a camera. The hypotheses test the untrained part: whether the wiring downstream of the
 motion and feature detectors turns their activity into the right descending commands.
 
+**Long-term aim (stated 2026-09-11).** This is a body-transfer experiment. Phase 1 (this document) measures what an
+unmodified nervous system does in a body it did not evolve for, and where the mismatch lies. Phase 2 hands the legs to
+the nerve cord with proprioceptive feedback from the robot. Phase 3 studies adaptation: which biologically grounded
+plasticity lets the transplanted system recalibrate. Phase 1 results are the baseline the later phases are measured
+against, which is one more reason nothing in it may be tuned.
+
 ## 2. Hypotheses (pre-registered)
 
 Each hypothesis names the fly behaviour, the known circuit, the model readout and the pass criterion.

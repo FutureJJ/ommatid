@@ -11,6 +11,17 @@ descending neurons a fly actually walks with: DNa02 (steering), DNa01 (forward),
 The body is a Hiwonder RoSpider hexapod. The brain runs on a server; the body streams what it sees and receives what
 to do. Everything is watchable live.
 
+## Purpose
+
+Ommatid is a body-transfer experiment. A nervous system that evolved for one body — six legs a few millimetres long,
+wings, compound eyes spanning almost the whole sphere — is placed in a body it never had: a six-legged robot with one
+camera, no wings, joints driven by servos. Phase 1 measures what survives the transfer untouched: which reflexes still
+work, which fail, and where exactly the mismatch is (field of view, timing, proprioception). Phase 2 lets the nerve cord
+drive the legs and feel them through the robot's own sensors. Phase 3 asks what an adapting nervous system needs to
+live in a new body at all: which plasticity, grounded in the fly's own circuits, closes the gap. The point is to leave a
+carefully measured reference for a question that will be asked of other nervous systems one day: what happens to a
+mind when its body changes.
+
 ## Layout
 - `ommatid/brain/` — connectome graph, LIF kernel (numba), eye, descending-neuron readout
 - `ommatid/body/` — Raspberry Pi side: camera, gait commands, reflexes
