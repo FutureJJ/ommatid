@@ -77,3 +77,12 @@ Failure of P2-b/c/d is expected and is the baseline for phase 3.
 Phase 2 has no plasticity. The motto changes only when phase 3's dopamine-gated mushroom-body plasticity and the
 central-complex heading plasticity are running and a pre-registered integration metric improves over days against the
 plasticity-off control.
+
+## 7. Measured on the graph (2026-09-11, `ommatid/brain/motor.py`, `proprio.py`, `tools/build_sensory_sides.py`)
+- Motor pools: 266 leg motor neurons mapped to the 18 servos. Per leg and side: coxa agonists 2–6 / antagonists 4–7,
+  femur 11–16 / 5–8, tibia 11–17 / 2. Tibia extensor pools are small (2 cells) — the flexion/extension balance of that
+  joint will rest on few neurons; noted.
+- Proprioceptors with an inferred side: chordotonal 399 (18–100 per leg), hair plates 71, campaniform 37, halteres 56;
+  563 neurons injected in total. Side inference from one-hop output partners has median confidence 0.66–0.74 (many leg
+  sensory neurons project to both sides), so the per-leg pools are approximate; the perturbation test (P2-b) will show
+  whether the mapping is good enough to produce a same-leg reflex.
