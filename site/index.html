@@ -209,7 +209,6 @@ function drawEye(cv, vals, mirror){
     const g = Math.round(40 + 200*Math.max(0,Math.min(1,vals[i]))); c.fillStyle = `rgb(${g},${g},${g})`; c.beginPath(); c.arc(S/2 + x*k, S/2 + y*k, r, 0, 6.283); c.fill(); }
 }
 // ---------- telemetry ----------
-let lastCam = 0;
 function apply(s){
   $('live').classList.toggle('on', s.seen==='live'); $('livetext').textContent = s.seen==='live' ? 'live' : (s.seen==='blind' ? 'blind (control)' : 'no frame from the body');
   if (s.fired_sample && lit.length){ for (const i of s.fired_sample) lit[i] = 1; }
@@ -230,8 +229,16 @@ function apply(s){
     ['battery', b.battery_v ? fmt(b.battery_v,2)+' V' : '—'], ['lidar ahead', b.lidar_front_m ? fmt(b.lidar_front_m,2)+' m' : '—'],
     ['heading', b.yaw_deg!=null ? fmt(b.yaw_deg,0)+'°' : '—'], ['optic lobe · brain', `${fmt(s.flyvis_ms,0)} · ${fmt(s.lif_ms,0)} ms`],
   ].map(([k,v])=>`<div><small>${k}</small>${v==null?'—':v}</div>`).join('');
-  const now = Date.now(); if (s.seen==='live' && now-lastCam > 400){ lastCam = now; $('cam').src = '/frame.jpg?t='+now; }
+  camLive = (s.seen==='live');
 }
+// camera: load the next frame only after the previous one has finished (a new src every 400 ms through a CDN
+// cancels the load before it completes and the image never appears)
+let camLive = false;
+const cam = $('cam');
+function nextFrame(){ if (!camLive){ setTimeout(nextFrame, 500); return; } cam.src = '/frame.jpg?t=' + Date.now(); }
+cam.onload = () => setTimeout(nextFrame, 250);
+cam.onerror = () => setTimeout(nextFrame, 1500);
+nextFrame();
 function connect(){
   const ws = new WebSocket((location.protocol==='https:'?'wss://':'ws://') + location.host + '/telemetry');
   ws.onmessage = e => apply(JSON.parse(e.data));
