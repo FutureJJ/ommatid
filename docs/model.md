@@ -85,8 +85,8 @@ Code and pretrained ensembles are MIT (TuragaLab/flyvis). On this machine the pr
 
 Hand-off: FlyVis output types (T1-T3, T4a-d, T5a-d, Tm, TmY) → activity minus grey-field steady state, rectified,
 × 100 Hz per unit → forced spikes in the male CNS neurons of the same type at the nearest column (≤ 6°). The left
-eye is the same network fed a mirrored frame. 9,183 male neurons receive input this way; T4/T5 columns are the
-anatomically inferred ones of section 3.
+eye is the same network fed a mirrored frame. 38,011 male neurons receive input this way (columns of T4/T5 and other unlabeled types are the
+anatomically inferred ones of section 3).
 
 Hybrid pilot (`tools/pilot_hybrid.py`, open loop, synthetic stimuli, nothing frozen yet):
 
