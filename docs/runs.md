@@ -169,3 +169,14 @@ condition; H1 50 %; H3 71 % toward the bright side (bright_R +3.1 Hz, bright_L �
 Same chain and freeze. Display moved closer: the screen now spans 55 % × 60 % of the camera frame ≈ **41° × 30°**
 (≈ 40 cm for a 30 cm screen), centred after tilting the camera to servo pulse 235; room dark, screen the main light.
 Derived: grating period ≈ 8.1°, drift ≈ 12°/s brain time (≈ 1.5 Hz); loom 1.5° → 27°; half-field boundary at the midline.
+
+### Exploratory: why the looming detectors stay silent (2026-09-11, `tools/diagnose_lc4.py`; for the v3 design, not a test)
+Anatomy: 80 % of LC4's excitatory input (343 mV/cell) comes from types the hand-off drives — TmY3, T2, Tm4, Tm2, Tm3 — so the
+boundary covers the pathway; LPLC2 64 %, LC6 42 %. Dynamics on an emulation of the rig (bright 55 % × 60 % screen in a dark
+frame, disc 5 → 90 % of the screen): LC4's mean synaptic drive is net NEGATIVE (g ≈ −5.5 mV) with the frozen gain of 100 Hz per
+unit; LC4 fires ~5 spikes per 20 ms across its 126 cells and the loom does not raise that; DNp04 0. Whole-frame loom: the same.
+Gain sweep (exploratory): at 200 the loom raises LC4 (17 vs 14 spikes/step) and DNp04 fires 3 spikes in 2 s; at 400, DNp04 158 in
+the loom vs 12 in the settle window; at 800, 491 vs 67 — the response appears, but so does background DNp04 activity.
+Reading: the pathway is there, but under a single global scalar the injected medulla activity leaves LC4 under net inhibition;
+a looming response would require either a higher gain (which also raises the background) or a per-type scaling of FlyVis
+activity (its units are not comparable across types). Both are v3 design questions, to be pre-registered before any trial.
