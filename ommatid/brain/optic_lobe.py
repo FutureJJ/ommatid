@@ -63,12 +63,14 @@ class OpticLobe:
 
     # ---- rendering ----------------------------------------------------------
     def _place(self, gray: np.ndarray, mirror: bool) -> np.ndarray:
-        """Put the camera frame on the eye's canvas at the angles it covers; elsewhere the frame's mean."""
+        """Put the camera frame on the eye's canvas at the angles it covers; elsewhere a fixed 50 % grey."""
         p = self.p
         from PIL import Image
         H, W = gray.shape
         img = np.ascontiguousarray(gray[:, ::-1]) if mirror else gray
-        canvas = np.full((self.canvas, self.canvas), float(gray.mean()), np.float32)
+        # Review finding 6: the surround used to be the frame mean, so a dark disc dimmed the whole eye. Fixed grey now —
+        # the same value FlyVis was settled on — so only what the camera sees can change the retinal image.
+        canvas = np.full((self.canvas, self.canvas), 0.5, np.float32)
         px_w = int(round(p.cam_hfov_deg / p.deg_per_px))
         px_h = int(round(px_w * H / W))
         small = np.asarray(Image.fromarray((np.clip(img, 0, 1) * 255).astype(np.uint8)).resize((px_w, px_h), Image.BILINEAR),
@@ -134,6 +136,27 @@ class ColumnMap:
                 if ok.any():
                     self.pairs[(t, side)] = (j[ok].astype(np.int64), male[ok])
                     self.n_mapped += int(ok.sum())
+
+    @classmethod
+    def load(cls, path, brain):
+        """Load the serialised map built from the original anatomy (tools/build_columns.py), for ANY graph variant."""
+        import hashlib
+        z = np.load(path, allow_pickle=False)
+        if int(z["n_neurons"]) != brain.n:
+            raise RuntimeError("columns.npz was built for a different neuron set")
+        if not np.array_equal(z["bodies"], brain.bodies[z["male"]]):
+            raise RuntimeError("columns.npz neuron identities do not match this graph")
+        self = cls.__new__(cls)
+        self.pairs = {}; self.n_mapped = int(len(z["male"])); self.n_inferred = int(z["n_inferred"])
+        types, sides = z["types"].astype(str), z["sides"].astype(str)
+        for t in np.unique(types):
+            for sd in ("R", "L"):
+                m = (types == t) & (sides == sd)
+                if m.any():
+                    self.pairs[(t, sd)] = (z["pos"][m].astype(np.int64), z["male"][m].astype(np.int64))
+        self.source_graph_sha = str(z["source_graph_sha"])
+        self.sha = hashlib.sha256(open(path, "rb").read()).hexdigest()[:12]
+        return self
 
     def drive(self, rates: dict) -> dict:
         """LIF external drive {tuple(male neuron idx): rates_hz} from FlyVis rates {type: (2, n_cols)}."""

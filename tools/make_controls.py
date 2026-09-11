@@ -1,8 +1,9 @@
 """Control graphs for the experiment (docs/experiment.md §3).
 
-C1 shuffled wiring : every edge keeps its presynaptic neuron and its weight (so sign, synapse count and each neuron's
-                     out-degree are preserved) but its postsynaptic endpoint is drawn from a random permutation of all
-                     postsynaptic endpoints — so every neuron's in-degree is preserved too. Duplicates are merged.
+C1 shuffled wiring : every edge keeps its presynaptic neuron and its weight; its postsynaptic endpoint is drawn from a
+                     random permutation of all postsynaptic endpoints. This preserves every neuron's in- and out-degree in
+                     the MULTIGRAPH sense (counting parallel edges). Coincident edges are then merged (summed), which lowers
+                     the unique-neighbour degree of a small fraction of neurons; the exact fraction is measured and printed.
 C2 scrambled signs : original wiring; the excitatory/inhibitory label is permuted across neurons (the multiset of
                      signs is preserved, their assignment to neurons is not).
 
@@ -24,9 +25,13 @@ perm = rng.permutation(W.nnz)
 S = sp.csr_matrix((W.data, (W.row[perm], W.col)), shape=(n, n), dtype=np.float32); S.sum_duplicates()
 out = dict(z); out.update(data=S.data, indices=S.indices, indptr=S.indptr)
 np.savez_compressed(ROOT / "build/graph_shuffled.npz", **out)
-outdeg_ok = np.array_equal(np.bincount(W.col, minlength=n), np.bincount(S.tocoo().col, minlength=n) + 0 * np.bincount(W.col, minlength=n)) if False else True
-print(f"C1 shuffled: {S.nnz:,} edges after merging duplicates; in-degree preserved: "
-      f"{np.array_equal(np.bincount(W.row, minlength=n), np.bincount(W.row[perm], minlength=n))}")
+Sc = S.tocoo()
+in0, out0 = np.bincount(W.row, minlength=n), np.bincount(W.col, minlength=n)            # unique-neighbour degrees, original
+in1, out1 = np.bincount(Sc.row, minlength=n), np.bincount(Sc.col, minlength=n)          # saved shuffled graph
+print(f"C1 shuffled: {S.nnz:,} edges after merging {W.nnz - S.nnz:,} coincident edges ({(W.nnz - S.nnz) / W.nnz * 100:.2f} %)")
+print(f"   unique in-degree changed for {(in0 != in1).sum():,} neurons (max change {np.abs(in0 - in1).max()}), "
+      f"unique out-degree changed for {(out0 != out1).sum():,} (max {np.abs(out0 - out1).max()}); "
+      f"total |weight| preserved: {np.isclose(np.abs(W.data).sum(), np.abs(S.data).sum())}")
 
 # ---- C2: permute signs across neurons; weights of neuron j become |w| * new_sign[j]
 sign = z["sign"].astype(np.float32)

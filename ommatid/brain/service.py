@@ -63,7 +63,11 @@ class BrainService:
     def __init__(self, graph=ROOT / "build/graph.npz", mode="live", log_dir=ROOT / "logs", gains: Gains = Gains()):
         t = time.time()
         self.brain = Brain(graph); self.eye = Eye(self.brain); self.ol = OpticLobe(); self.ro = Readout(self.brain, gains)
-        self.cmap = ColumnMap(self.ol, self.brain, self.eye.column_angles_all)
+        # the input mapping is fixed anatomy, built once from the original graph and shared by every variant (review finding 1)
+        cols = Path(graph).parent / "columns.npz"
+        if not cols.exists():
+            raise RuntimeError("build/columns.npz missing — run tools/build_columns.py on the original graph first")
+        self.cmap = ColumnMap.load(cols, self.brain)
         self.mode = mode
         self.log = Telemetry(Path(log_dir))
         self.lock = threading.Lock()
@@ -75,7 +79,8 @@ class BrainService:
                        "nerve cord": np.char.startswith(sc.astype(str), "vnc_") | (sc == "ascending_neuron")}
         self.command = {"linear_mps": 0.0, "yaw_rps": 0.0, "stop": True, "reason": "starting"}
         self.state = {"step": 0, "brain_ms": 0.0, "mode": mode, "setup_s": round(time.time() - t, 1),
-                      "mapped_neurons": int(self.cmap.n_mapped), "graph_sha": self._sha(graph)}
+                      "mapped_neurons": int(self.cmap.n_mapped), "graph_sha": self._sha(graph),
+                      "columns_sha": self.cmap.sha, "columns_from_graph": self.cmap.source_graph_sha}
         self.fired_sample = np.zeros(0, np.int32)
         self.protocol = Protocol(trials_per_condition=0)
         self.stim = {"kind": "grey", "trial": None, "phase": "idle", "condition": None}
