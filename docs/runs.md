@@ -123,3 +123,6 @@ So v1 shows a response to an abruptly appearing dark object, not looming selecti
 consistent with carry-over across the 1 s baseline. Loom ΔDNp04 +13.3 Hz [+9.4, +17.2], ΔDNp02 +5.8 Hz [+4.0, +7.6];
 DNp01, DNp09, MDN 0 Hz in every trial. Original vs shuffled loom rise +13.6 vs +4.6 Hz (p = 0.0001) remains informative only
 (mapping confound). H1 and H3 unchanged: not met.
+- **Run 3 stopped at trial 34/210 (12:53 UTC).** With scrambled signs the network is ~5× more active and the simulation ran at
+  8× dilation; more importantly the run carried the input-mapping confound (review finding 1), so it could only be exploratory.
+  Its 34 trials are kept in `runs/data/scrambled-aborted/` and not analysed. C2 is rerun under protocol v2 with the fixed map.
