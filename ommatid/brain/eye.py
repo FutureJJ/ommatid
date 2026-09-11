@@ -111,6 +111,47 @@ class Eye:
         self.last_I = I
         return {tuple(self.idx): rates.astype(np.float32)}
 
+    def column_angles(self, side: str):
+        """(indices, azimuth, elevation) for every hex-carrying neuron of one side, azimuth lateral-positive from the
+        midline. Same normalisation as the lamina map: hex1−hex2 front→back, hex1+hex2 ventral→dorsal."""
+        p = self.p
+        idx = np.flatnonzero((self.brain.side == side) & np.isfinite(self.brain.hex1) & np.isfinite(self.brain.hex2))
+        A = self.brain.hex1[idx] - self.brain.hex2[idx]; E = self.brain.hex1[idx] + self.brain.hex2[idx]
+        fr = (A.max() - A) / max(A.max() - A.min(), 1)
+        azimuth = -p.binocular_overlap_deg / 2 + fr * p.eye_azimuth_span_deg
+        elevation = ((E - E.min()) / max(E.max() - E.min(), 1) - 0.5) * p.eye_elevation_span_deg
+        return idx, azimuth.astype(np.float32), elevation.astype(np.float32)
+
+    def column_angles_all(self, side: str):
+        """Like column_angles, plus neurons WITHOUT a column assignment whose receptive-field centre is inferred
+        anatomically: the synapse-weighted mean angle of their column-carrying presynaptic partners on the same
+        side (one hop). This is how T4/T5, Tm3, TmY and similar types get a column. Returns (idx, az, el, inferred)."""
+        import scipy.sparse as sp
+        b = self.brain
+        idx, az, el = self.column_angles(side)
+        known = np.full(b.n, np.nan, np.float32); known_el = np.full(b.n, np.nan, np.float32)
+        known[idx] = az; known_el[idx] = el
+        W = sp.csc_matrix((b.wdata, b.indices, b.indptr), shape=(b.n, b.n)).tocsr()   # row = post, col = pre
+        cand = np.flatnonzero((b.side == side) & np.isnan(known) &
+                              np.isin(b.superclass, ["ol_intrinsic", "visual_projection", "ol_sensory"]))
+        sub = W[cand]
+        has = np.isfinite(known)
+        out_i, out_a, out_e = [], [], []
+        for r, i in enumerate(cand):
+            a, z = sub.indptr[r], sub.indptr[r + 1]
+            pre = sub.indices[a:z]; w = np.abs(sub.data[a:z])
+            m = has[pre]
+            if m.sum() == 0 or w[m].sum() == 0:
+                continue
+            ww = w[m] / w[m].sum()
+            out_i.append(i); out_a.append(float((known[pre[m]] * ww).sum())); out_e.append(float((known_el[pre[m]] * ww).sum()))
+        inf_idx = np.array(out_i, dtype=np.int64)
+        all_idx = np.concatenate([idx, inf_idx])
+        all_az = np.concatenate([az, np.array(out_a, np.float32)])
+        all_el = np.concatenate([el, np.array(out_e, np.float32)])
+        inferred = np.concatenate([np.zeros(len(idx), bool), np.ones(len(inf_idx), bool)])
+        return all_idx, all_az, all_el, inferred
+
     def blind(self) -> dict:
         """Control C4: no image at all — the paper's zero-input baseline."""
         return {}
