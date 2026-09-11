@@ -16,7 +16,8 @@ The stock Hiwonder stack does the gait; this only tells it how fast to go and tu
 that stack (it steps in place), so idling publishes nothing and stopping sends an explicit Traveling gait=0.
 """
 from __future__ import annotations
-import json, math, os, threading, time, urllib.request
+import json, math, os, threading, time, http.client, ssl
+from urllib.parse import urlsplit
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
@@ -63,6 +64,7 @@ class Body(Node):
         self.pub_action = self.create_publisher(RunActionSet, "/controller/run_actionset", 5)
         self.pub_servo = self.create_publisher(ServosPosition, "/servo_controller", 5)
         self.moving = False
+        self.conn = None                      # persistent HTTPS connection to the brain (a new TLS handshake per frame cost ~0.6 s)
         self._halt()
         self._cam_timer = self.create_timer(2.0, self._aim_camera_once)
         self.create_timer(0.1, self._drive)
@@ -124,11 +126,23 @@ class Body(Node):
                 "lidar_age_ms": round((time.time() - self.scan_ts) * 1000) if self.scan_ts else None, "lidar": self.scan_meta,
                 "frames": self.stats["frames"], "lease_stops": self.stats["lease_stops"], "obstacle_blocks": self.stats["obstacle_blocks"],
                 "stale_cmds": self.stats["stale_cmds"], "moving": self.moving}
-        req = urllib.request.Request(BRAIN_URL, data=jpeg, method="POST",
-                                     headers={"Content-Type": "image/jpeg", "Authorization": f"Bearer {TOKEN}",
-                                              "User-Agent": "Ommatid-Body/0.2", "X-Ommatid-Telemetry": json.dumps(tele)})
-        with urllib.request.urlopen(req, timeout=1.5) as resp:
-            cmd = json.loads(resp.read())
+        u = urlsplit(BRAIN_URL)
+        if self.conn is None:
+            self.conn = (http.client.HTTPSConnection(u.hostname, u.port or 443, timeout=1.5, context=ssl.create_default_context())
+                         if u.scheme == "https" else http.client.HTTPConnection(u.hostname, u.port or 80, timeout=1.5))
+        try:
+            self.conn.request("POST", u.path, body=jpeg,
+                              headers={"Content-Type": "image/jpeg", "Authorization": f"Bearer {TOKEN}", "User-Agent": "Ommatid-Body/0.3",
+                                       "X-Ommatid-Telemetry": json.dumps(tele), "Connection": "keep-alive"})
+            resp = self.conn.getresponse(); data = resp.read()
+            if resp.status != 200:
+                raise RuntimeError(f"brain HTTP {resp.status}")
+            cmd = json.loads(data)
+        except Exception:
+            try: self.conn.close()
+            except Exception: pass
+            self.conn = None
+            raise
         now = time.time()
         with self.lock:
             step = int(cmd.get("step", -1))
