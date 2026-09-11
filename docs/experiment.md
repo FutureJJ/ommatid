@@ -162,3 +162,51 @@ Joesch M et al. (2010) ON and OFF pathways in Drosophila motion vision. Nature.
 Clark DA et al. (2011) Defining the computational structure of the motion detector in Drosophila. Neuron.
 Lappalainen JK et al. (2024) Connectome-constrained networks predict neural activity across the fly visual system. Nature.
 FlyEM male CNS v1.0 (2026) HHMI Janelia, Cambridge Connectomics Group, Google Research. CC-BY.
+
+## 10. Amendments for protocol v2 (pre-registered 2026-09-11, before any v2 trial)
+
+Written after the independent review of the v1 runs (docs/runs.md). v1 results stand as exploratory.
+
+**Interface invariants**
+- The FlyVis → neuron column map is derived once from the original anatomy (`tools/build_columns.py` → `build/columns.npz`),
+  hashed, and loaded unchanged for every graph variant. Its hash is recorded in every snapshot and log.
+- The off-camera surround of each eye is a fixed 50 % grey; only the camera can change the retinal image.
+- Injected FlyVis-driven neurons keep their recurrent input (additive forcing). This is a declared modelling decision; a
+  boundary-clamped variant (their recurrent input zeroed) is run as an additional control, C5.
+
+**Frame-locked stimulus record**
+- The stimulus display acknowledges every change of what is on screen (trial, phase, kind, its clock); the server stamps
+  receipt time. Every frame from the body carries capture time; every brain step records which frame it consumed and its age.
+- A step's stimulus is the display state acknowledged at least 300 ms before the frame it consumed was received
+  (allowance for display → camera → server). This constant is fixed here.
+
+**Trial validity (decided before looking at responses)**
+- A trial is invalid if any of its steps had no fresh frame (`seen ≠ live`), if its baseline or stimulus phase lacks a display
+  acknowledgement, or if the protocol was interrupted. Invalid trials are excluded from the primary analysis and counted.
+- After any interruption the protocol inserts 3 s of grey (brain time) before the next trial.
+
+**H2 as an onset criterion**
+- Baseline 2000 ms grey (was 1000), stimulus 2000 ms.
+- Response onset = first of two consecutive stimulus steps at which any escape/stop readout (DNp01, DNp02, DNp04, DNp09, MDN)
+  exceeds that trial's baseline mean + 2 SD. H2 requires onset ≤ 200 ms of brain time in ≥ 70 % of valid loom trials and in
+  < 20 % of valid trials of EACH control condition, reported separately, never pooled.
+- Controls: fade-in static disc (contrast ramps over the full 2000 ms to the same final size as the loom's end state),
+  luminance-matched receding disc (the loom played backwards), gratings, grey.
+
+**H1 / H3 readout panel**
+- Turning is read from a pre-registered panel, not a single pair: DNa02 L/R, DNa01 L/R, DNb02 L/R, DNa03 L/R (if present),
+  each reported; the primary statistic remains the DNa02 asymmetry.
+- Hand-off scalar (Hz per FlyVis unit) is calibrated before v2 so that HS-cell rates for a full-contrast grating at the
+  preferred direction fall in the physiological range (≤ 150 Hz), using a calibration stimulus that is not a test stimulus.
+
+**Controls and replication**
+- C1 shuffled wiring: multigraph-degree-preserving endpoint permutation; coincident edges merged (measured: 0.19 % of edges,
+  unique in-degree changed for 5,701 neurons). Three independent seeds.
+- C2 scrambled signs: one seed (its network is hyperactive, ~5× the real activity; reported as such).
+- C5 boundary-clamped: original wiring, recurrent input to FlyVis-driven neurons removed.
+- Each condition ≥ 30 valid trials; runs repeated on two days with the geometry re-recorded.
+
+**Body**
+- Stationary (dry run) for all v2 neural readouts. Motion trials are a separate, later protocol with its own
+  pre-registration, after the body agent's safety fixes (non-blocking network, step-advancing lease, angle-based LiDAR sector)
+  have been exercised with actuators disabled.
