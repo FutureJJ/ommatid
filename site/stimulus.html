@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ommatid stimulus</title>
+<style>
+html,body{margin:0;height:100%;background:#808080;overflow:hidden;cursor:none}
+canvas{display:block;width:100vw;height:100vh}
+#info{position:fixed;left:12px;bottom:10px;font:12px/1.5 ui-monospace,Menlo,monospace;color:#000;background:rgba(255,255,255,.75);padding:6px 10px;display:none;white-space:pre}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="info"></div>
+<script>
+// Full-screen stimulus display for the fly. Shows exactly what the brain server says is current; nothing else.
+// Press "i" to toggle a small info overlay (for the experimenter, not for the fly). Click for fullscreen.
+const cv = document.getElementById('c'), ctx = cv.getContext('2d'), info = document.getElementById('info');
+let spec = {kind: 'grey'}, lastFetch = 0, fails = 0, showInfo = false, frames = 0;
+function size(){ cv.width = innerWidth * devicePixelRatio; cv.height = innerHeight * devicePixelRatio; }
+addEventListener('resize', size); size();
+document.addEventListener('keydown', e => { if (e.key === 'i') { showInfo = !showInfo; info.style.display = showInfo ? 'block' : 'none'; } });
+document.addEventListener('click', () => { if (document.fullscreenElement) return; document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); });
+async function poll(){
+  try { const r = await fetch('/stimulus/state.json', {cache: 'no-store'}); spec = await r.json(); fails = 0; }
+  catch (e) { if (++fails > 5) spec = {kind: 'grey', error: true}; }
+  setTimeout(poll, 100);
+}
+poll();
+function draw(){
+  const W = cv.width, H = cv.height;
+  ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, W, H);
+  if (spec.kind === 'grating') {
+    const period = spec.period * W;                          // px per cycle
+    const shift = ((spec.phase_sw || 0) * W * (spec.direction || 1)) % period;
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#000';
+    for (let x = -period + shift; x < W + period; x += period) ctx.fillRect(x, 0, period / 2, H);
+  } else if (spec.kind === 'disc') {
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(W / 2, H / 2, (spec.size || 0) * H / 2, 0, 6.2832); ctx.fill();
+  } else if (spec.kind === 'half') {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#fff'; if (spec.bright === 'R') ctx.fillRect(W / 2, 0, W / 2, H); else ctx.fillRect(0, 0, W / 2, H);
+  }
+  frames++;
+  if (showInfo) info.textContent = `trial ${spec.trial ?? '-'} / ${spec.n_trials ?? '-'}  ${spec.condition ?? ''}  ${spec.phase ?? ''}  t=${spec.t_brain_ms ?? 0} ms brain\nkind ${spec.kind}  ${spec.error ? 'SERVER UNREACHABLE' : ''}`;
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>

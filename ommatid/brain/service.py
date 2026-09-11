@@ -24,6 +24,7 @@ from .lif import Brain
 from .eye import Eye
 from .optic_lobe import OpticLobe, ColumnMap
 from .readout import Readout, Gains
+from .protocol import Protocol
 
 ROOT = Path(__file__).resolve().parents[2]
 STEPS = 100                     # 100 × 0.2 ms = 20 ms brain time per control step
@@ -73,6 +74,8 @@ class BrainService:
         self.state = {"step": 0, "brain_ms": 0.0, "mode": mode, "setup_s": round(time.time() - t, 1),
                       "mapped_neurons": int(self.cmap.n_mapped), "graph_sha": self._sha(graph)}
         self.fired_sample = np.zeros(0, np.int32)
+        self.protocol = Protocol(trials_per_condition=0)
+        self.stim = {"kind": "grey", "trial": None, "phase": "idle", "condition": None}
         self.running = True
         threading.Thread(target=self._loop, name="brain-loop", daemon=True).start()
 
@@ -115,7 +118,10 @@ class BrainService:
                 cmd.update(stop=True, linear_mps=0.0, yaw_rps=0.0)
             cmd["reason"] = seen; cmd["step"] = self.state["step"] + 1; cmd["ts"] = time.time()
             wall = time.perf_counter() - t0
+            dil = wall / (STEPS * self.brain.p.dt / 1000)
+            stim = self.protocol.tick(self.brain.t_ms, dil)
             with self.lock:
+                self.stim = stim
                 self.command = cmd
                 self.state.update(step=cmd["step"], brain_ms=round(self.brain.t_ms, 1), seen=seen,
                                   wall_ms=round(wall * 1000, 1), dilation=round(wall / (STEPS * self.brain.p.dt / 1000), 2),
@@ -123,6 +129,7 @@ class BrainService:
                                   spikes=r["total"], fired=int(len(r["fired"])), mean_mv=round(r["mean_mv"], 2),
                                   rates=hz, smoothed={k: round(v, 1) for k, v in self.ro.smoothed.items()}, command=cmd, frame_hash=fhash, body=body,
                                   drive_cells=int(sum(len(k) for k in drive)) if drive else 0,
+                                  stim={k: stim.get(k) for k in ("kind", "trial", "condition", "phase")},
                                   active={k: int(r["counts"][m].astype(bool).sum()) for k, m in self.groups.items()},
                                   totals={k: int(m.sum()) for k, m in self.groups.items()})
                 f = r["fired"]
@@ -130,7 +137,10 @@ class BrainService:
             self.log.add({"ts": cmd["ts"], "step": cmd["step"], "brain_ms": self.brain.t_ms, "wall_ms": wall * 1000,
                           "seen": seen, "frame_hash": fhash, "spikes": r["total"], "fired": int(len(r["fired"])),
                           **{f"hz_{k}": v for k, v in hz.items()}, "cmd_linear": cmd["linear_mps"], "cmd_yaw": cmd["yaw_rps"],
-                          "cmd_stop": cmd["stop"], **{f"body_{k}": v for k, v in body.items() if isinstance(v, (int, float, str, bool))}})
+                          "cmd_stop": cmd["stop"], "stim_kind": stim.get("kind"), "stim_trial": stim.get("trial"),
+                          "stim_condition": stim.get("condition"), "stim_phase": stim.get("phase"),
+                          "stim_t_ms": stim.get("t_brain_ms"), "protocol_seed": self.protocol.seed if self.protocol.active else None,
+                          **{f"body_{k}": v for k, v in body.items() if isinstance(v, (int, float, str, bool))}})
 
     def snapshot(self) -> dict:
         with self.lock:
@@ -174,6 +184,27 @@ def make_app(svc: BrainService, token: str) -> web.Application:
         return web.Response(body=code.tobytes(), content_type="application/octet-stream",
                             headers={"Cache-Control": "public, max-age=86400"})
 
+    async def stim_state(req):
+        with svc.lock: st = dict(svc.stim)
+        st["server_ts"] = time.time()
+        return web.json_response(st, headers={"Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"})
+
+    async def protocol_start(req):
+        if token and req.headers.get("Authorization") != f"Bearer {token}": raise web.HTTPUnauthorized()
+        q = await req.json() if req.can_read_body else {}
+        svc.protocol = Protocol(trials_per_condition=int(q.get("trials_per_condition", 30)), seed=int(q.get("seed", 2026)),
+                                note=str(q.get("note", "")))
+        svc.protocol.start(svc.brain.t_ms)
+        svc.log.flush()
+        return web.json_response(svc.protocol.status())
+
+    async def protocol_stop(req):
+        if token and req.headers.get("Authorization") != f"Bearer {token}": raise web.HTTPUnauthorized()
+        svc.protocol.stop(); svc.log.flush()
+        return web.json_response(svc.protocol.status())
+
+    async def protocol_status(req): return web.json_response(svc.protocol.status())
+
     async def telemetry(req):
         ws = web.WebSocketResponse(heartbeat=20); await ws.prepare(req); clients.add(ws)
         try:
@@ -196,6 +227,8 @@ def make_app(svc: BrainService, token: str) -> web.Application:
 
     app.add_routes([web.post("/body/frame", frame), web.get("/state.json", state), web.get("/health", health),
                     web.get("/soma.bin", soma), web.get("/groups.bin", groups), web.get("/frame.jpg", frame_jpg),
+                    web.get("/stimulus/state.json", stim_state), web.post("/protocol/start", protocol_start),
+                    web.post("/protocol/stop", protocol_stop), web.get("/protocol/status.json", protocol_status),
                     web.get("/telemetry", telemetry)])
     app.on_startup.append(start_bg); app.on_cleanup.append(stop_bg)
     return app
