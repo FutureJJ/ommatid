@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ommatid — see it through the fly's eye</title>
+<meta name="description" content="Upload a picture or use your camera and see it the way a fruit fly's nervous system does: 721 eye columns, the optic lobe, and the first 200 ms of a real connectome.">
+<link rel="stylesheet" href="/style.css?v=7">
+<style>
+.drop{border:1.5px dashed var(--ink);padding:26px 20px;text-align:center;background:var(--paper);cursor:pointer}
+.drop.over{background:var(--paper2)}
+.drop p{margin:6px 0;color:var(--ink2)} .drop b{font-weight:600}
+.btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px}
+button.act{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;border:1.5px solid var(--ink);background:var(--paper);color:var(--ink);padding:9px 16px;cursor:pointer}
+button.act:hover{background:var(--ink);color:var(--paper)} button.act[disabled]{opacity:.4;cursor:default}
+#video{width:100%;max-width:480px;display:none;border:1px solid var(--grid2);background:#000}
+#card{width:100%;display:block;background:var(--paper)}
+#status{font-family:var(--mono);font-size:12px;color:var(--ink2);letter-spacing:.06em;min-height:18px;margin-top:8px}
+.small{font-size:13.5px;color:var(--ink2);font-style:italic}
+</style>
+</head>
+<body>
+<div class="page">
+<div class="tb">
+  <div class="name"><h1>OMMATID<small>See it through the fly's eye: your picture on 721 eye columns, through the optic lobe, into a real connectome.</small></h1></div>
+  <div class="cells"><div class="cell"><small>eye columns</small><b>721 × 2</b></div><div class="cell"><small>neurons</small><b>165,122</b></div><div class="cell"><small>simulated</small><b>200 ms</b></div><div class="cell"><small>your picture</small><b>not stored</b></div></div>
+</div>
+<nav class="tabs"><a href="/">Live</a><a href="/results">Results</a><a class="on" href="/see">Fly's eye</a><a href="/#support">Support</a><a href="https://github.com/FutureJJ/ommatid">Source</a></nav>
+
+<figure class="plate corner" style="max-width:900px;margin:18px auto 0">
+  <header><span class="t"><b>Plate XI</b> — your picture, seen by a fly</span> <span>drop a photo, or use your camera</span></header>
+  <div class="body">
+    <div class="drop" id="drop"><p><b>Drop a picture here</b> or click to choose one</p><p class="small">faces work well; nothing is uploaded except the picture, and it is processed and discarded</p></div>
+    <input type="file" id="file" accept="image/*" hidden>
+    <div class="btns"><button class="act" id="camBtn">Use my camera</button><button class="act" id="shot" disabled>Take the picture</button></div>
+    <video id="video" autoplay playsinline muted></video>
+    <div id="status"></div>
+  </div>
+</figure>
+
+<figure class="plate" style="max-width:900px;margin:18px auto 0" id="cardplate" hidden>
+  <header><span class="t"><b>Plate XII</b> — the card</span> <span id="cardsub"></span></header>
+  <div class="body"><canvas id="card" width="1600" height="1000"></canvas></div>
+  <figcaption>Left: your picture on the fly's 721-column retina (right eye; the left eye sees it mirrored). Middle: which optic-lobe cell types the picture activated (FlyVis, connectome-constrained). Right: the neurons of the male connectome that fired in the first 200 ms, at their real positions. A still picture has no motion, so the motion detectors T4/T5 see only its appearance and then fall silent; a real fly would see mostly motion.</figcaption>
+  <div class="btns" style="padding:0 0 14px"><button class="act" id="dl">Download card</button><button class="act" id="tw">Post on X</button><button class="act" id="again">Another picture</button></div>
+</figure>
+
+<section class="prose" style="margin-top:44px">
+  <p class="small">What is real here: the wiring (which neuron connects to which) is measured from one fruit fly by electron microscopy; the optic lobe is a connectome-constrained model trained on an optic-flow task (Lappalainen et al. 2024); the spiking is a simulation with the parameters of Shiu et al. 2024. A real fly sees ~300° and mostly motion, so this is a demonstration of the pipeline, not a claim about fly perception. The live fly is at <a href="/">ommatid.org</a>.</p>
+</section>
+<footer><span>Connectome: FlyEM male CNS v1.0 · CC-BY</span><span>Optic lobe: FlyVis · MIT</span><span>Code: MIT · github.com/FutureJJ/ommatid</span></footer>
+</div>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const INK = '#16140f', INK2 = '#5a554b', INK3 = '#948e82', PAPER = '#f3efe6', PAPER2 = '#ebe6db', RED = '#c9321f';
+const HEX = (() => { const p = []; for (let u = -15; u <= 15; u++) for (let v = -15; v <= 15; v++) if (Math.abs(u + v) <= 15) p.push([u, v]); return p; })();
+let soma = null, groups = null, stream = null, lastResult = null, lastImg = null;
+fetch('/soma.bin').then(r => r.arrayBuffer()).then(b => soma = new Float32Array(b));
+fetch('/groups.bin').then(r => r.arrayBuffer()).then(b => groups = new Uint8Array(b));
+
+const drop = $('drop'), file = $('file'), status = $('status');
+drop.addEventListener('click', () => file.click());
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer.files[0]) send(e.dataTransfer.files[0]); });
+file.addEventListener('change', () => { if (file.files[0]) send(file.files[0]); });
+$('camBtn').addEventListener('click', async () => {
+  try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 400 } }); $('video').srcObject = stream; $('video').style.display = 'block'; $('shot').disabled = false; status.textContent = 'camera on'; }
+  catch (e) { status.textContent = 'camera not available: ' + e.message; }
+});
+$('shot').addEventListener('click', () => {
+  const v = $('video'), c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext('2d').drawImage(v, 0, 0);
+  c.toBlob(b => send(b), 'image/jpeg', 0.9);
+});
+$('again').addEventListener('click', () => { $('cardplate').hidden = true; window.scrollTo({ top: 0, behavior: 'smooth' }); });
+$('dl').addEventListener('click', () => { const a = document.createElement('a'); a.download = 'ommatid-fly-eye.png'; a.href = $('card').toDataURL('image/png'); a.click(); });
+$('tw').addEventListener('click', () => {
+  const r = lastResult; const txt = r ? `a fruit fly's nervous system looked at my picture: ${r.fired_total.toLocaleString()} of 165,122 neurons fired in the first 200 ms. see yours at ommatid.org/see` : 'ommatid.org/see';
+  window.open('https://twitter.com/intent/tweet?text=' + encodeURIComponent(txt), '_blank');
+});
+
+async function send(blob) {
+  status.textContent = 'the fly is looking…';
+  lastImg = await createImageBitmap(blob).catch(() => null);
+  try {
+    const r = await fetch('/eye/look', { method: 'POST', body: blob, headers: { 'Content-Type': blob.type || 'image/jpeg' } });
+    if (!r.ok) { status.textContent = await r.text(); return; }
+    lastResult = await r.json(); status.textContent = ''; draw(lastResult);
+    $('cardplate').hidden = false; $('cardsub').textContent = `${lastResult.fired_total.toLocaleString()} of ${lastResult.n.toLocaleString()} neurons fired · ${lastResult.spikes.toLocaleString()} spikes in 200 ms`;
+    $('cardplate').scrollIntoView({ behavior: 'smooth' });
+  } catch (e) { status.textContent = 'something went wrong: ' + e.message; }
+}
+
+function grid(ctx, x, y, w, h) {
+  ctx.fillStyle = PAPER; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = 'rgba(20,18,14,.09)'; ctx.lineWidth = 1;
+  for (let gx = x; gx <= x + w; gx += 16) { ctx.beginPath(); ctx.moveTo(gx + .5, y); ctx.lineTo(gx + .5, y + h); ctx.stroke(); }
+  for (let gy = y; gy <= y + h; gy += 16) { ctx.beginPath(); ctx.moveTo(x, gy + .5); ctx.lineTo(x + w, gy + .5); ctx.stroke(); }
+}
+function label(ctx, x, y, s, size = 20, color = INK3, weight = '500') { ctx.fillStyle = color; ctx.font = `${weight} ${size}px "JetBrains Mono", ui-monospace, monospace`; ctx.textAlign = 'left'; ctx.fillText(s, x, y); }
+
+function draw(r) {
+  const cv = $('card'), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  grid(ctx, 0, 0, W, H);
+  ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.strokeRect(24, 24, W - 48, H - 48);
+  // title block
+  ctx.fillStyle = INK; ctx.font = '800 64px "Bricolage Grotesque", system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.fillText('OMMATID', 56, 108);
+  label(ctx, 56, 146, 'A FRUIT FLY\'S NERVOUS SYSTEM LOOKED AT THIS PICTURE', 20, INK2);
+  label(ctx, W - 56 - 430, 90, 'ommatid.org/see', 22, INK, '700');
+  label(ctx, W - 56 - 430, 122, '165,122 NEURONS · MALE CNS v1.0 · 200 MS SIMULATED', 16);
+  // panel geometry
+  const top = 200, ph = 620, pw = (W - 56 * 2 - 40 * 2) / 3, y0 = top;
+  const panels = [[56, 'I · RETINA, 721 COLUMNS'], [56 + pw + 40, 'II · OPTIC LOBE, CELL TYPES'], [56 + 2 * (pw + 40), 'III · CONNECTOME, FIRST 200 MS']];
+  for (const [px, t] of panels) { ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.strokeRect(px, y0, pw, ph); ctx.fillStyle = PAPER2; ctx.fillRect(px, y0, pw, 40); ctx.strokeRect(px, y0, pw, 40); label(ctx, px + 14, y0 + 27, t, 17, INK, '700'); }
+  // I retina (right eye)
+  const vals = r.retina[0], cx = panels[0][0] + pw / 2, cy = y0 + 40 + (ph - 40) / 2, k = Math.min(pw, ph - 40) / 440, rr = 5.5 * k;
+  for (let i = 0; i < HEX.length && i < vals.length; i++) { const [u, v] = HEX[i]; const x = 13 * v, y = 12.97 * u + 6.49 * v; const g = Math.round(24 + 205 * Math.max(0, Math.min(1, vals[i]))); ctx.fillStyle = `rgb(${g},${g - 2},${g - 6})`; ctx.beginPath(); ctx.arc(cx + x * k, cy + y * k, rr, 0, 6.283); ctx.fill(); }
+  // small original thumbnail bottom-left of panel I
+  if (lastImg) { const tw = 110, th = 69; ctx.save(); ctx.filter = 'grayscale(1)'; ctx.drawImage(lastImg, panels[0][0] + 14, y0 + ph - th - 14, tw, th); ctx.restore(); ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.strokeRect(panels[0][0] + 14, y0 + ph - th - 14, tw, th); label(ctx, panels[0][0] + 14 + tw + 10, y0 + ph - 20, 'YOUR PICTURE →', 13); }
+  // II optic lobe types
+  const px2 = panels[1][0]; const types = r.types.slice(0, 9); const max = Math.max(1e-6, ...types.map(t => t.activation));
+  types.forEach((t, i) => { const y = y0 + 80 + i * 56; label(ctx, px2 + 18, y + 6, t.type, 22, INK, '700'); ctx.fillStyle = PAPER2; ctx.fillRect(px2 + 130, y - 14, pw - 150, 24); ctx.strokeStyle = 'rgba(20,18,14,.16)'; ctx.strokeRect(px2 + 130, y - 14, pw - 150, 24); ctx.fillStyle = i === 0 ? RED : INK; ctx.fillRect(px2 + 130, y - 14, (pw - 150) * t.activation / max, 24); });
+  label(ctx, px2 + 18, y0 + ph - 48, 'activation above the grey-field baseline', 14);
+  label(ctx, px2 + 18, y0 + ph - 24, 'a still picture: motion detectors see only its appearance', 14);
+  // III connectome
+  const px3 = panels[2][0];
+  if (soma && groups) {
+    let xmin = 1e9, xmax = -1e9, ymin = 1e9, ymax = -1e9; const n = groups.length;
+    for (let i = 0; i < n; i++) { const x = soma[3 * i], y = soma[3 * i + 1]; if (x === 0 && y === 0) continue; if (x < xmin) xmin = x; if (x > xmax) xmax = x; if (y < ymin) ymin = y; if (y > ymax) ymax = y; }
+    const pad = 30, s = Math.min((pw - 2 * pad) / (xmax - xmin), (ph - 40 - 2 * pad - 60) / (ymax - ymin)); const ox = px3 + (pw - (xmax - xmin) * s) / 2, oy = y0 + 40 + pad;
+    const P = i => [ox + (xmax - soma[3 * i]) * s, oy + (soma[3 * i + 1] - ymin) * s];
+    ctx.fillStyle = 'rgba(22,20,15,.16)'; for (let i = 0; i < n; i += 2) { const x = soma[3 * i]; if (x === 0 && soma[3 * i + 1] === 0) continue; const [a, b] = P(i); ctx.fillRect(a, b, 1.2, 1.2); }
+    ctx.fillStyle = RED; for (const i of r.fired_sample) { const [a, b] = P(i); ctx.fillRect(a - 1.5, b - 1.5, 3, 3); }
+    label(ctx, px3 + 18, y0 + ph - 52, `${r.fired_total.toLocaleString()} neurons fired · ${r.spikes.toLocaleString()} spikes`, 17, INK, '700');
+    const g = r.groups, tt = r.totals; label(ctx, px3 + 18, y0 + ph - 26, `optic lobes ${g['optic lobe']} · brain ${g['central brain']} · descending ${g['descending']} · cord ${g['nerve cord']}`, 14);
+  }
+  // footer
+  label(ctx, 56, H - 48, 'WIRING: FLYEM MALE CNS v1.0 (CC-BY) · OPTIC LOBE: FLYVIS · SPIKING: SHIU ET AL. 2024 · A DEMONSTRATION OF THE PIPELINE, NOT A CLAIM ABOUT FLY PERCEPTION', 13, INK3);
+}
+})();
+</script>
+</body>
+</html>

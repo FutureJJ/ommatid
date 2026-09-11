@@ -101,6 +101,14 @@ class BrainService:
             self.proprio = Proprioception(self.brain, ann, {int(i): str(x) for i, x in zip(zs["idx"], zs["side"])})
             self.state["phase2"] = {"motor_neurons": int(len(self.motor.all_idx)), "proprioceptors": self.proprio.describe()}
         self.last_servo_cmd = {}
+        # "See it through the fly's eye": a guest copy of the brain (shared graph, own state) and its own optic lobe,
+        # so visitors' pictures never touch the live fly. One request at a time.
+        import copy
+        self.guest = copy.copy(self.brain); self.guest.reset(seed=1)
+        self.guest_ol = OpticLobe(OpticLobeParams(hz_per_unit=float(os.environ.get("OMMATID_HZ_PER_UNIT", OpticLobeParams.hz_per_unit))))
+        self.guest_lock = threading.Lock()
+        self.type_index = {}
+        for t, idx in self.guest_ol.out_idx.items(): self.type_index[t] = idx
         self.stim = {"kind": "grey", "trial": None, "phase": "idle", "condition": None}
         self.running = True
         threading.Thread(target=self._loop, name="brain-loop", daemon=True).start()
@@ -193,6 +201,35 @@ class BrainService:
                           **({f"servo_{k}": v for k, v in self.last_servo_cmd.items()} if self.motor is not None else {}),
                           **{f"body_{k}": v for k, v in body.items() if isinstance(v, (int, float, str, bool))}})
 
+    def look_for_visitor(self, jpeg: bytes) -> dict:
+        """A visitor's picture through the fly's eye: retina (both eyes), optic-lobe cell-type activation, and the
+        connectome's first 200 ms. Runs on the guest brain; returns a JSON-able dict."""
+        from PIL import Image, ImageOps
+        img = Image.open(io.BytesIO(jpeg)); img = ImageOps.exif_transpose(img).convert("L")
+        img = ImageOps.fit(img, (320, 200), Image.LANCZOS)                 # the camera's 8:5 frame
+        gray = np.asarray(img, np.float32) / 255.0
+        with self.guest_lock:
+            ol, b = self.guest_ol, self.guest
+            ol.state = ol.net.steady_state(t_pre=1.0, dt=ol.p.dt, batch_size=2)
+            b.reset(seed=1)
+            for _ in range(3):                                             # let the optic lobe respond (60 ms)
+                act = ol.see(gray)
+            rates = ol.rates(act); drive = self.cmap.drive(rates)
+            dev = act - ol.baseline
+            types = sorted(((t, float(np.clip(dev[:, idx], 0, None).mean())) for t, idx in self.type_index.items()), key=lambda kv: -kv[1])
+            counts = np.zeros(b.n, np.int64); fired_any = np.zeros(b.n, bool); totals = []
+            for _ in range(10):                                            # 200 ms of the fly's time
+                r = b.run(drive, STEPS); counts += r["counts"]; fired_any[r["fired"]] = True; totals.append(r["total"])
+            secs = 10 * STEPS * b.p.dt / 1000.0
+            dn = {k: round(float(counts[v].sum() / len(v) / secs), 1) for k, v in self.ro.pop.items()}
+            fired = np.flatnonzero(fired_any)
+            groups = {k: int(fired_any[m].sum()) for k, m in self.groups.items()}
+            sample = fired if len(fired) <= 4000 else np.random.default_rng(0).choice(fired, 4000, replace=False)
+            return {"retina": np.round(ol.last_movie, 3).tolist(), "types": [{"type": t, "activation": round(a, 3)} for t, a in types[:10]],
+                    "injected": int(sum(len(k) for k in drive)), "fired_total": int(len(fired)), "spikes": int(sum(totals)),
+                    "groups": groups, "totals": {k: int(m.sum()) for k, m in self.groups.items()}, "dn": dn,
+                    "fired_sample": sample.astype(int).tolist(), "n": int(b.n)}
+
     def snapshot(self) -> dict:
         with self.lock:
             s = dict(self.state); fired = self.fired_sample.tolist()
@@ -228,6 +265,23 @@ def make_app(svc: BrainService, token: str) -> web.Application:
         with svc.lock: jpeg = svc.jpeg
         if not jpeg: raise web.HTTPNotFound()
         return web.Response(body=jpeg, content_type="image/jpeg", headers={"Cache-Control": "no-store"})
+    _visitor_last = {}
+    async def visitor_look(req):
+        """POST /eye/look — a visitor's picture (JPEG/PNG ≤ 2 MB) through the fly's eye. One at a time, 1 per 4 s per IP."""
+        ip = req.headers.get("CF-Connecting-IP") or req.headers.get("X-Forwarded-For", "").split(",")[0].strip() or (req.remote or "?")
+        now = time.time()
+        if now - _visitor_last.get(ip, 0) < 4.0:
+            raise web.HTTPTooManyRequests(text="one look every 4 seconds, please")
+        _visitor_last[ip] = now
+        data = await req.read()
+        if len(data) > 2_000_000: raise web.HTTPRequestEntityTooLarge(max_size=2_000_000, actual_size=len(data))
+        loop = asyncio.get_running_loop()
+        try:
+            out = await loop.run_in_executor(None, svc.look_for_visitor, data)
+        except Exception as e:
+            raise web.HTTPBadRequest(text=f"could not read that picture: {e}")
+        return web.json_response(out, headers={"Cache-Control": "no-store"})
+
     async def eye_mjpg(req):
         """Continuous MJPEG stream of the camera frames the brain receives (for OBS Media Source / VLC)."""
         resp = web.StreamResponse(status=200, headers={"Content-Type": "multipart/x-mixed-replace; boundary=frame",
@@ -302,7 +356,7 @@ def make_app(svc: BrainService, token: str) -> web.Application:
     async def stop_bg(app): app["bg"].cancel(); svc.log.flush(); svc.display_log.flush()
 
     app.add_routes([web.post("/body/frame", frame), web.get("/state.json", state), web.get("/health", health),
-                    web.get("/soma.bin", soma), web.get("/groups.bin", groups), web.get("/frame.jpg", frame_jpg), web.get("/eye.mjpg", eye_mjpg),
+                    web.get("/soma.bin", soma), web.get("/groups.bin", groups), web.get("/frame.jpg", frame_jpg), web.get("/eye.mjpg", eye_mjpg), web.post("/eye/look", visitor_look),
                     web.get("/stimulus/state.json", stim_state), web.post("/protocol/start", protocol_start), web.post("/stimulus/ack", stim_ack),
                     web.post("/protocol/stop", protocol_stop), web.get("/protocol/status.json", protocol_status),
                     web.get("/telemetry", telemetry)])
