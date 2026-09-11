@@ -34,5 +34,10 @@ Pre-registered criteria:
 
 Interpretation is deferred to the control-graph runs (C1 shuffled wiring, C2 scrambled signs) with the identical protocol.
 
-## v1 run 2 — 2026-09-11 11:27 UTC, C1 shuffled wiring
-- same protocol, seed 2026, same display geometry; graph `build/graph_shuffled.npz` (degree-preserving permutation, seed 2026)
+## v1 run 2 — 2026-09-11 11:31 UTC, C1 shuffled wiring
+- same protocol, seed 2026, same display geometry; graph `build/graph_shuffled.npz` (degree-preserving permutation, seed 2026),
+  sha256 prefix 3bfdad7c298a (original: 050359b2a09f), verified in the service state before the start
+- correction: a first start at 11:26 UTC ran for about two minutes on the ORIGINAL graph because the server was still running
+  the previous service build, which ignored the graph setting. It was stopped; its rows (ts ≥ 1789125979) are quarantined in
+  `logs/original-aborted/` and excluded from every analysis. Logs are now written per variant (`logs/original/`, `logs/shuffled/`).
+- first observation: whole-network activity on the shuffled graph is about a third of the original's (≈ 9,700 vs ≈ 28,500 spikes per 20 ms) under the same input
