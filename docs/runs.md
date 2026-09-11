@@ -106,3 +106,20 @@ An external review (GPT-6 Astra, run by Can) found six issues. Status of each:
 
 Also accepted: raw logs of every run are to be published (runs/data/), and the C2 run started at 12:39 UTC carries the same
 mapping confound (finding 1) and is exploratory.
+
+### Re-analysis of v1 with the corrected tool (2026-09-11, `tools/analyze.py --mode v1`, valid trials only)
+17 original-run trials with no-frame steps excluded (disc 5, grey 3, bright_R 3, loom 3, grating_R 2, bright_L 1).
+
+| condition | n valid | Δ escape/stop Hz [95 % CI] | trials > 5 Hz | loom vs this, p |
+|---|---|---|---|---|
+| loom | 27 | +13.6 [+9.9, +17.4] | 70 % | — |
+| static disc | 25 | +10.1 [+7.0, +13.1] | 72 % | 0.16 |
+| grey | 27 | +3.8 [+1.9, +5.7] | 30 % | 0.0001 |
+| gratings | 58 | +0.2 | 0 % | < 0.0001 |
+| bright halves | 56 | +0.2 | 0 % | < 0.0001 |
+
+The static disc — which appears in a single frame — evokes the same escape-neuron response as the expanding disc.
+So v1 shows a response to an abruptly appearing dark object, not looming selectivity. Grey trials show a residual +3.8 Hz,
+consistent with carry-over across the 1 s baseline. Loom ΔDNp04 +13.3 Hz [+9.4, +17.2], ΔDNp02 +5.8 Hz [+4.0, +7.6];
+DNp01, DNp09, MDN 0 Hz in every trial. Original vs shuffled loom rise +13.6 vs +4.6 Hz (p = 0.0001) remains informative only
+(mapping confound). H1 and H3 unchanged: not met.
