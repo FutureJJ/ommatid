@@ -149,7 +149,7 @@ footer a{color:var(--ink2);border:0}
 <script>
 (() => {
 const $ = id => document.getElementById(id);
-const fmt = (v, d=1) => (v==null||isNaN(v)) ? '—' : Number(v).toFixed(d);
+const fmt = (v, d=1) => (v==null||isNaN(v)) ? '—' : (Math.abs(v) < 0.5*Math.pow(10,-d) ? (0).toFixed(d) : Number(v).toFixed(d));
 const DN = [
   ['DNa02_L','DNa02 left','steer'],['DNa02_R','DNa02 right','steer'],
   ['DNa01_L','DNa01 left','forward'],['DNa01_R','DNa01 right','forward'],
