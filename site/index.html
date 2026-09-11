@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ommatid</title>
+<meta name="description" content="A real fruit-fly nervous system, simulated neuron by neuron, given a six-legged metal body. Live.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0c0c0d; --bg2:#121214; --line:#232326; --line2:#2e2e33;
+  --ink:#e9e6df; --ink2:#a7a49c; --ink3:#66645f;
+  --eye:#d4432c;            /* the pigment of a wild-type fly eye: the one accent, used for spikes only */
+  --eye2:#7a2a1e;
+  --serif:"Newsreader",Georgia,"Times New Roman",serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--serif);font-size:17px;line-height:1.45;-webkit-font-smoothing:antialiased}
+a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--line2)}
+a:hover{border-color:var(--ink2)}
+.mono{font-family:var(--mono);font-size:12.5px;letter-spacing:.01em}
+header{display:flex;align-items:baseline;justify-content:space-between;padding:18px 24px 14px;border-bottom:1px solid var(--line)}
+header h1{margin:0;font-weight:400;font-size:22px;letter-spacing:.02em}
+header h1 span{color:var(--ink3);font-style:italic;font-weight:300;margin-left:10px;font-size:17px}
+header nav a{margin-left:22px;font-size:15px;color:var(--ink2);border:0}
+header nav a:hover{color:var(--ink)}
+.live{display:inline-flex;align-items:center;gap:8px;color:var(--ink2)}
+.live i{width:7px;height:7px;border-radius:50%;background:var(--ink3);display:inline-block}
+.live.on i{background:var(--eye);box-shadow:0 0 0 3px rgba(212,67,44,.18)}
+main{display:grid;grid-template-columns:minmax(0,1fr) 420px;min-height:calc(100vh - 56px)}
+@media (max-width:980px){main{grid-template-columns:1fr}}
+#map-wrap{position:relative;border-right:1px solid var(--line);min-height:420px}
+@media (max-width:980px){#map-wrap{border-right:0;border-bottom:1px solid var(--line);height:70vh}}
+#map{position:absolute;inset:0;width:100%;height:100%;display:block}
+.legend{position:absolute;left:18px;bottom:16px;color:var(--ink2);font-family:var(--mono);font-size:12px;line-height:1.7}
+.legend b{color:var(--ink);font-weight:500}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--eye);margin-right:8px;vertical-align:middle}
+.caption{position:absolute;left:18px;top:16px;max-width:360px;color:var(--ink2);font-size:15px;font-style:italic}
+aside{display:flex;flex-direction:column}
+.panel{padding:16px 22px 18px;border-bottom:1px solid var(--line)}
+.panel h2{margin:0 0 10px;font-family:var(--mono);font-weight:500;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3)}
+.eyes{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.eyes canvas{width:100%;aspect-ratio:1/1;background:var(--bg2);border:1px solid var(--line);border-radius:2px}
+.eyes .lab{font-family:var(--mono);font-size:11px;color:var(--ink3);margin-top:4px}
+#cam{width:100%;aspect-ratio:8/5;background:var(--bg2);border:1px solid var(--line);object-fit:cover;display:block;border-radius:2px;filter:grayscale(1)}
+.rows{display:grid;grid-template-columns:auto 1fr auto;gap:6px 12px;align-items:center;font-family:var(--mono);font-size:12.5px}
+.rows .n{color:var(--ink2)}
+.rows .bar{height:6px;background:var(--bg2);border:1px solid var(--line);position:relative;border-radius:1px;overflow:hidden}
+.rows .bar b{position:absolute;left:0;top:0;bottom:0;background:var(--ink2);width:0;transition:width .25s}
+.rows .bar.hot b{background:var(--eye)}
+.rows .v{color:var(--ink);min-width:58px;text-align:right}
+.rows .sub{grid-column:1/-1;color:var(--ink3);font-size:11px;margin:-2px 0 4px}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;font-family:var(--mono);font-size:12.5px}
+.kv div{border-top:1px solid var(--line);padding-top:6px}
+.kv small{display:block;color:var(--ink3);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:2px}
+.cmd{display:flex;align-items:center;gap:18px;font-family:var(--mono);font-size:12.5px}
+.cmd svg{width:64px;height:64px;flex:none}
+.cmd .t{color:var(--ink2)}
+.badge{display:inline-block;font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink2);border:1px solid var(--line2);padding:2px 7px;border-radius:2px;margin-left:8px;vertical-align:middle}
+section.prose{max-width:760px;margin:0 auto;padding:64px 24px 80px}
+section.prose h2{font-weight:400;font-size:28px;margin:48px 0 14px;letter-spacing:.005em}
+section.prose p{color:var(--ink2);font-size:18px;line-height:1.55;margin:0 0 16px}
+section.prose p b{color:var(--ink);font-weight:500}
+table{width:100%;border-collapse:collapse;font-size:15px;margin:18px 0 8px}
+th,td{text-align:left;padding:9px 10px 9px 0;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink2)}
+th{font-family:var(--mono);font-weight:500;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
+td:first-child{color:var(--ink)}
+td.s{font-family:var(--mono);font-size:12px;white-space:nowrap}
+footer{border-top:1px solid var(--line);padding:22px 24px 40px;color:var(--ink3);font-size:14px;display:flex;flex-wrap:wrap;gap:8px 28px}
+footer a{color:var(--ink2);border:0}
+</style>
+</head>
+<body>
+<header>
+  <h1>Ommatid <span>a fly's nervous system in a six-legged body</span></h1>
+  <nav class="mono"><span class="live" id="live"><i></i><span id="livetext">connecting</span></span><a href="#about">About</a><a href="#honesty">What is real</a><a href="https://github.com/FutureJJ/ommatid">Source</a></nav>
+</header>
+
+<main>
+  <div id="map-wrap">
+    <canvas id="map"></canvas>
+    <div class="caption" id="caption">165,122 neurons of one male <i>Drosophila melanogaster</i>, drawn at the measured position of each cell body. Red: fired in the last 20 ms of the fly's time.</div>
+    <div class="legend" id="legend"></div>
+  </div>
+
+  <aside>
+    <div class="panel">
+      <h2>What it sees</h2>
+      <img id="cam" alt="the robot's camera">
+      <div class="eyes" style="margin-top:10px">
+        <div><canvas id="eyeL" width="300" height="300"></canvas><div class="lab">left eye · 721 columns</div></div>
+        <div><canvas id="eyeR" width="300" height="300"></canvas><div class="lab">right eye · 721 columns</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Descending neurons <span class="badge" title="exponential average over 200 ms of brain time">smoothed</span></h2>
+      <div class="rows" id="dn"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Command to the body</h2>
+      <div class="cmd">
+        <svg viewBox="-32 -32 64 64" id="cmdsvg" aria-hidden="true">
+          <circle r="28" fill="none" stroke="#232326"/>
+          <line x1="0" y1="0" x2="0" y2="-24" stroke="#66645f" stroke-width="1" stroke-dasharray="2 3"/>
+          <g id="arrow"><line x1="0" y1="0" x2="0" y2="-22" stroke="#e9e6df" stroke-width="1.5"/><path d="M-4 -17 L0 -23 L4 -17" fill="none" stroke="#e9e6df" stroke-width="1.5"/></g>
+        </svg>
+        <div><div id="cmdtext">—</div><div class="t" id="cmdsub"></div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>State</h2>
+      <div class="kv" id="kv"></div>
+    </div>
+  </aside>
+</main>
+
+<section class="prose" id="about">
+  <h2>What this is</h2>
+  <p>In 2026 the complete wiring diagram of a male fruit fly's central nervous system was published: <b>165,122 neurons</b> and every synapse between them, traced from electron microscope images of one animal. Ommatid runs that wiring as a simulation and gives it a body: a six-legged robot with a camera, standing in a room.</p>
+  <p>The fly sees through the robot's camera, sampled onto its own retina of 721 columns per eye. The optic lobe is a connectome-constrained model of the fly visual system (Lappalainen et al. 2024). Everything downstream, the central brain and the ventral nerve cord, is the male connectome run as leaky integrate-and-fire neurons with the parameters of Shiu et al. 2024, <b>with nothing trained and nothing tuned to behaviour</b>. The robot moves when the descending neurons a fly walks with fire: DNa02 to steer, DNa01 to walk forward, MDN to back up, DNp09 to stop.</p>
+  <p>The question is simple to state. If you give a wiring diagram eyes and legs, do the reflexes of the animal appear? Three are pre-registered: turning with the visual world (the optomotor response), stopping or backing away from an approaching object, and walking toward light. Each is tested against a control in which the same neurons are rewired at random. Failures will be reported as failures. The protocol, the honesty rules and the code are public.</p>
+
+  <h2 id="honesty">What is real, what is assumed, what is invented</h2>
+  <table>
+    <tr><th>Component</th><th>Source</th><th>Status</th></tr>
+    <tr><td>Neurons, synapses, synapse counts</td><td>FlyEM male CNS v1.0, electron microscopy</td><td class="s">measured</td></tr>
+    <tr><td>Cell types, sides, eye columns, soma positions</td><td>male CNS annotations</td><td class="s">measured, curated</td></tr>
+    <tr><td>Excitatory or inhibitory</td><td>neurotransmitter predicted from the images; GABA and glutamate inhibitory, all else excitatory</td><td class="s">predicted</td></tr>
+    <tr><td>Optic lobe, photoreceptors to T4/T5</td><td>FlyVis: FIB-25 wiring, a few scalars per cell type trained on an optic-flow task, never on neural data</td><td class="s">connectome-constrained, task-trained</td></tr>
+    <tr><td>Optic lobe → central brain hand-off</td><td>activity minus its grey-field baseline, rectified, one scalar to spikes per second</td><td class="s">invented, fixed before trials</td></tr>
+    <tr><td>Neuron dynamics</td><td>Shiu et al. 2024: −52 mV rest, −45 mV threshold, 20 ms membrane, 5 ms synapse, 1.8 ms delay, 0.275 mV per synapse</td><td class="s">literature</td></tr>
+    <tr><td>Descending-neuron rate → speed and turn</td><td>one gain per channel</td><td class="s">invented, fixed before trials</td></tr>
+    <tr><td>The gait itself</td><td>the robot's own leg controller, not the nerve cord</td><td class="s">engineering, phase 2 replaces it</td></tr>
+  </table>
+  <p>The brain runs slower than the animal's: one 20 ms step of the fly's time takes about 130 ms of ours. The dilation is shown live above and reported with every result. The full design is in <a href="https://github.com/FutureJJ/ommatid/blob/main/docs/experiment.md">docs/experiment.md</a>; what broke on the way and why is in <a href="https://github.com/FutureJJ/ommatid/blob/main/docs/model.md">docs/model.md</a>.</p>
+</section>
+
+<footer>
+  <span>Connectome: FlyEM male CNS v1.0, HHMI Janelia, Cambridge Connectomics Group, Google Research, CC-BY.</span>
+  <span>Optic lobe: FlyVis, Turaga lab, MIT.</span>
+  <span>Code: MIT, <a href="https://github.com/FutureJJ/ommatid">github.com/FutureJJ/ommatid</a>.</span>
+</footer>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const fmt = (v, d=1) => (v==null||isNaN(v)) ? '—' : Number(v).toFixed(d);
+const DN = [
+  ['DNa02_L','DNa02 left','steer'],['DNa02_R','DNa02 right','steer'],
+  ['DNa01_L','DNa01 left','forward'],['DNa01_R','DNa01 right','forward'],
+  ['MDN','MDN','backward'],['DNp09','DNp09','stop'],
+  ['DNp04','DNp04','escape'],['DNp02','DNp02','escape'],['DNp01','DNp01 giant fibre','escape']];
+const dn = $('dn');
+for (const [k,label,role] of DN) {
+  dn.insertAdjacentHTML('beforeend', `<div class="n">${label}</div><div class="bar" id="bar_${k}"><b></b></div><div class="v" id="v_${k}">—</div>`);
+}
+dn.insertAdjacentHTML('beforeend', `<div class="sub">spikes per second per neuron · bar full at 200 Hz</div>`);
+
+// ---------- neuron map ----------
+const map = $('map'), ctx = map.getContext('2d');
+let soma = null, groups = null, proj = null, base = null, W=0, H=0, dpr = Math.min(2, window.devicePixelRatio||1);
+const GROUP_SHADE = [0, 0.16, 0.22, 0.30, 0.19];   // 1 optic lobe, 2 central brain, 3 descending, 4 nerve cord
+let lit = new Float32Array(0);   // per-neuron glow, decays
+async function loadSoma(){
+  const [sb, gb] = await Promise.all([fetch('/soma.bin').then(r=>r.arrayBuffer()), fetch('/groups.bin').then(r=>r.arrayBuffer())]);
+  soma = new Float32Array(sb); groups = new Uint8Array(gb); lit = new Float32Array(groups.length);
+  layout();
+}
+function layout(){
+  const r = map.getBoundingClientRect(); W = Math.max(1, r.width|0); H = Math.max(1, r.height|0);
+  map.width = W*dpr; map.height = H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
+  if (!soma) return;
+  // frontal projection: x → screen x, y (dorsal→ventral) → screen y. Fit with margins.
+  const n = groups.length; let xmin=1e9,xmax=-1e9,ymin=1e9,ymax=-1e9;
+  for (let i=0;i<n;i++){ const x=soma[3*i], y=soma[3*i+1]; if (x===0&&y===0) continue; if(x<xmin)xmin=x; if(x>xmax)xmax=x; if(y<ymin)ymin=y; if(y>ymax)ymax=y; }
+  const pad = 48, sx = (W-2*pad)/(xmax-xmin), sy = (H-2*pad)/(ymax-ymin), s = Math.min(sx, sy);
+  const ox = (W - (xmax-xmin)*s)/2, oy = (H - (ymax-ymin)*s)/2;
+  proj = new Float32Array(2*n);
+  for (let i=0;i<n;i++){ const x=soma[3*i], y=soma[3*i+1]; if (x===0&&y===0){proj[2*i]=-9;proj[2*i+1]=-9;continue;} proj[2*i]= ox + (xmax - x)*s; proj[2*i+1]= oy + (y-ymin)*s; }
+  // the fly is drawn as seen from the front: its right side on the viewer's left → mirror x (xmax - x)
+  base = document.createElement('canvas'); base.width = W*dpr; base.height = H*dpr;
+  const b = base.getContext('2d'); b.setTransform(dpr,0,0,dpr,0,0); b.fillStyle = '#0c0c0d'; b.fillRect(0,0,W,H);
+  for (let g=1; g<=4; g++){ b.fillStyle = `rgba(233,230,223,${GROUP_SHADE[g]})`; for (let i=0;i<n;i++){ if (groups[i]!==g) continue; const x=proj[2*i]; if (x<0) continue; b.fillRect(x, proj[2*i+1], 1, 1); } }
+  $('legend').innerHTML = `<b>front view</b> · brain above, nerve cord below<br><i></i>fired · <span style="color:#a7a49c">optic lobes · central brain · descending · nerve cord</span>`;
+}
+function draw(){
+  if (!base) return;
+  ctx.drawImage(base, 0, 0, W, H);
+  const n = lit.length; ctx.fillStyle = '#d4432c';
+  for (let i=0;i<n;i++){ const l = lit[i]; if (l<=0.02) continue; const x=proj[2*i]; if (x<0){lit[i]=0;continue;} ctx.globalAlpha = Math.min(1,l); const r = 1+1.6*l; ctx.fillRect(x-r/2, proj[2*i+1]-r/2, r, r); lit[i] = l*0.86; }
+  ctx.globalAlpha = 1;
+  requestAnimationFrame(draw);
+}
+window.addEventListener('resize', layout);
+loadSoma().then(()=>requestAnimationFrame(draw));
+
+// ---------- eyes ----------
+const HEX = (() => { const pts=[]; for (let u=-15;u<=15;u++) for (let v=-15;v<=15;v++) if (Math.abs(u+v)<=15) pts.push([u,v]); return pts; })();
+function drawEye(cv, vals, mirror){
+  const c = cv.getContext('2d'), S = cv.width; c.fillStyle='#121214'; c.fillRect(0,0,S,S);
+  if (!vals) return;
+  const k = S/420, r = 5.6*k;
+  for (let i=0;i<HEX.length && i<vals.length;i++){ const [u,v]=HEX[i]; let x = 13*v, y = 12.97*u+6.49*v; if (mirror) x = -x;
+    const g = Math.round(40 + 200*Math.max(0,Math.min(1,vals[i]))); c.fillStyle = `rgb(${g},${g},${g})`; c.beginPath(); c.arc(S/2 + x*k, S/2 + y*k, r, 0, 6.283); c.fill(); }
+}
+// ---------- telemetry ----------
+let lastCam = 0;
+function apply(s){
+  $('live').classList.toggle('on', s.seen==='live'); $('livetext').textContent = s.seen==='live' ? 'live' : (s.seen==='blind' ? 'blind (control)' : 'no frame from the body');
+  if (s.fired_sample && lit.length){ for (const i of s.fired_sample) lit[i] = 1; }
+  if (s.eye){ drawEye($('eyeR'), s.eye[0], false); drawEye($('eyeL'), s.eye[1], true); }
+  const sm = s.smoothed || {};
+  for (const [k] of DN){ const v = sm[k]; const bar = $('bar_'+k); bar.querySelector('b').style.width = Math.min(100, (v||0)/2)+'%'; bar.classList.toggle('hot', (v||0)>20); $('v_'+k).textContent = fmt(v,1)+' Hz'; }
+  const c = s.command || {};
+  const yaw = c.yaw_rps||0, lin = c.linear_mps||0;
+  $('arrow').setAttribute('transform', `rotate(${-yaw*90}) scale(1 ${Math.max(0.15, Math.min(1, Math.abs(lin)/0.08 + (lin===0?0.15:0)))})`);
+  $('cmdtext').textContent = c.stop ? 'stop' : `forward ${fmt(lin*1000,0)} mm/s · turn ${fmt(yaw,2)} rad/s`;
+  const dry = s.body && s.body.dry_run;
+  $('cmdsub').textContent = (c.reason==='live' ? 'from the descending neurons' : c.reason||'') + (dry ? ' · body in dry run: not executed' : '');
+  const b = s.body || {}, act = s.active || {}, tot = s.totals || {};
+  $('kv').innerHTML = [
+    ['step', s.step], ['fly time', fmt(s.brain_ms/1000,1)+' s'], ['time dilation', fmt(s.dilation,1)+'×'], ['spikes / 20 ms', s.spikes],
+    ['optic lobes active', act['optic lobe']!=null ? `${act['optic lobe']} / ${tot['optic lobe']}` : '—'], ['central brain active', act['central brain']!=null ? `${act['central brain']} / ${tot['central brain']}` : '—'],
+    ['descending active', act['descending']!=null ? `${act['descending']} / ${tot['descending']}` : '—'], ['nerve cord active', act['nerve cord']!=null ? `${act['nerve cord']} / ${tot['nerve cord']}` : '—'],
+    ['battery', b.battery_v ? fmt(b.battery_v,2)+' V' : '—'], ['lidar ahead', b.lidar_front_m ? fmt(b.lidar_front_m,2)+' m' : '—'],
+    ['heading', b.yaw_deg!=null ? fmt(b.yaw_deg,0)+'°' : '—'], ['optic lobe · brain', `${fmt(s.flyvis_ms,0)} · ${fmt(s.lif_ms,0)} ms`],
+  ].map(([k,v])=>`<div><small>${k}</small>${v==null?'—':v}</div>`).join('');
+  const now = Date.now(); if (s.seen==='live' && now-lastCam > 400){ lastCam = now; $('cam').src = '/frame.jpg?t='+now; }
+}
+function connect(){
+  const ws = new WebSocket((location.protocol==='https:'?'wss://':'ws://') + location.host + '/telemetry');
+  ws.onmessage = e => apply(JSON.parse(e.data));
+  ws.onclose = () => { $('livetext').textContent = 'reconnecting'; setTimeout(connect, 2000); };
+  ws.onerror = () => ws.close();
+}
+connect();
+})();
+</script>
+</body>
+</html>

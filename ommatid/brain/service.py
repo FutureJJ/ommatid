@@ -63,7 +63,12 @@ class BrainService:
         self.mode = mode
         self.log = Telemetry(Path(log_dir))
         self.lock = threading.Lock()
-        self.frame = None; self.frame_ts = 0.0; self.frame_hash = ""; self.body = {}
+        self.frame = None; self.frame_ts = 0.0; self.frame_hash = ""; self.body = {}; self.jpeg = b""
+        sc = self.brain.superclass
+        self.groups = {"optic lobe": np.char.startswith(sc.astype(str), "ol_") | (sc == "visual_projection") | (sc == "visual_centrifugal"),
+                       "central brain": np.char.startswith(sc.astype(str), "cb_"),
+                       "descending": sc == "descending_neuron",
+                       "nerve cord": np.char.startswith(sc.astype(str), "vnc_") | (sc == "ascending_neuron")}
         self.command = {"linear_mps": 0.0, "yaw_rps": 0.0, "stop": True, "reason": "starting"}
         self.state = {"step": 0, "brain_ms": 0.0, "mode": mode, "setup_s": round(time.time() - t, 1),
                       "mapped_neurons": int(self.cmap.n_mapped), "graph_sha": self._sha(graph)}
@@ -84,7 +89,7 @@ class BrainService:
         img = Image.open(io.BytesIO(jpeg)).convert("L")
         gray = np.asarray(img, np.float32) / 255.0
         with self.lock:
-            self.frame = gray; self.frame_ts = time.time(); self.body = body
+            self.frame = gray; self.frame_ts = time.time(); self.body = body; self.jpeg = jpeg
             self.frame_hash = hashlib.sha1(jpeg).hexdigest()[:10]
             return dict(self.command)
 
@@ -117,9 +122,11 @@ class BrainService:
                                   flyvis_ms=round((t1 - t0) * 1000, 1), lif_ms=round((t2 - t1) * 1000, 1),
                                   spikes=r["total"], fired=int(len(r["fired"])), mean_mv=round(r["mean_mv"], 2),
                                   rates=hz, smoothed={k: round(v, 1) for k, v in self.ro.smoothed.items()}, command=cmd, frame_hash=fhash, body=body,
-                                  drive_cells=int(sum(len(k) for k in drive)) if drive else 0)
+                                  drive_cells=int(sum(len(k) for k in drive)) if drive else 0,
+                                  active={k: int(r["counts"][m].astype(bool).sum()) for k, m in self.groups.items()},
+                                  totals={k: int(m.sum()) for k, m in self.groups.items()})
                 f = r["fired"]
-                self.fired_sample = f if len(f) <= 6000 else np.random.default_rng(cmd["step"]).choice(f, 6000, replace=False)
+                self.fired_sample = f if len(f) <= 3000 else np.random.default_rng(cmd["step"]).choice(f, 3000, replace=False)
             self.log.add({"ts": cmd["ts"], "step": cmd["step"], "brain_ms": self.brain.t_ms, "wall_ms": wall * 1000,
                           "seen": seen, "frame_hash": fhash, "spikes": r["total"], "fired": int(len(r["fired"])),
                           **{f"hz_{k}": v for k, v in hz.items()}, "cmd_linear": cmd["linear_mps"], "cmd_yaw": cmd["yaw_rps"],
@@ -130,7 +137,7 @@ class BrainService:
             s = dict(self.state); fired = self.fired_sample.tolist()
         s["fired_sample"] = fired
         if self.ol.last_movie is not None:
-            s["eye"] = np.round(self.ol.last_movie, 3).tolist()        # (2, 721): what each eye's retina sees
+            s["eye"] = np.round(self.ol.last_movie, 2).tolist()        # (2, 721): what each eye's retina sees
         return s
 
     def soma_bin(self) -> bytes:
@@ -156,6 +163,16 @@ def make_app(svc: BrainService, token: str) -> web.Application:
     async def health(req): return web.json_response({"ok": True, "step": svc.state["step"], "seen": svc.state.get("seen")})
     async def soma(req): return web.Response(body=svc.soma_bin(), content_type="application/octet-stream",
                                              headers={"Cache-Control": "public, max-age=86400"})
+    async def frame_jpg(req):
+        with svc.lock: jpeg = svc.jpeg
+        if not jpeg: raise web.HTTPNotFound()
+        return web.Response(body=jpeg, content_type="image/jpeg", headers={"Cache-Control": "no-store"})
+    async def groups(req):
+        sc = svc.brain.superclass.astype(str)
+        code = np.zeros(svc.brain.n, np.uint8)
+        for i, (k, m) in enumerate(svc.groups.items(), start=1): code[m] = i
+        return web.Response(body=code.tobytes(), content_type="application/octet-stream",
+                            headers={"Cache-Control": "public, max-age=86400"})
 
     async def telemetry(req):
         ws = web.WebSocketResponse(heartbeat=20); await ws.prepare(req); clients.add(ws)
@@ -178,7 +195,8 @@ def make_app(svc: BrainService, token: str) -> web.Application:
     async def stop_bg(app): app["bg"].cancel(); svc.log.flush()
 
     app.add_routes([web.post("/body/frame", frame), web.get("/state.json", state), web.get("/health", health),
-                    web.get("/soma.bin", soma), web.get("/telemetry", telemetry)])
+                    web.get("/soma.bin", soma), web.get("/groups.bin", groups), web.get("/frame.jpg", frame_jpg),
+                    web.get("/telemetry", telemetry)])
     app.on_startup.append(start_bg); app.on_cleanup.append(stop_bg)
     return app
 
