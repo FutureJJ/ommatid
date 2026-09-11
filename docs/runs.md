@@ -152,3 +152,10 @@ camera before release (nearest object at 90° = the low table on the robot's lef
 - The Aurora 930 dropped off USB and its ROS driver died; frames stopped for several minutes. The body agent now relaunches
   `peripherals depth_camera.launch.py` when no image has arrived for 20 s (at most once per 2 min). Under protocol v2 such a
   gap invalidates the affected trial and inserts 3 s of grey; it cannot silently enter a result.
+
+## v2 runs — 2026-09-11 from 13:45 UTC (unattended chain, `deploy/run_v2.sh`)
+Order: original → shuffled 2026 → shuffled 2027 → shuffled 2028 → scrambled → clamped; 240 planned trials each, seed 2026;
+frozen parameters `freeze-v2` (docs/frozen-params-v2.md). Body locked (dry run). Display: the laptop screen measured in the
+camera frame at ≈ 26° wide (115 of 320 px of the 74° field) → about 63 cm from the camera for a 30 cm screen; centred; room
+dark, the screen is the main light. Derived: grating period ≈ 5.3°, drift ≈ 8°/s brain time, loom 0.8° → 15°, half-field
+boundary at the midline. Each run's graph and column hashes are written to `run_v2.log` at its start.
