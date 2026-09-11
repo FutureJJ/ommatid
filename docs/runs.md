@@ -145,3 +145,10 @@ Dry run switched off (OMMATID_DRY_RUN=0). Free viewing, no protocol. First minut
 (DNa02 left 13–24 Hz, right 0 Hz) produced a slow left turn, yaw command 0.03–0.06 rad/s; heading −46° → +21° in ~25 s.
 DNa01 silent → no forward motion. Lease stops 0, obstacle blocks 0, link errors 0. LiDAR front sector verified against the
 camera before release (nearest object at 90° = the low table on the robot's left; 0° = ahead).
+
+### Rig reliability notes (2026-09-11 evening)
+- The stock `stop` action group returns the arm — and the camera on it — to the rest pose (floor). The body agent no longer
+  uses it; a halt is `Traveling gait=0` only, and the camera tilt (servo 22 = 275) is re-asserted every 30 s.
+- The Aurora 930 dropped off USB and its ROS driver died; frames stopped for several minutes. The body agent now relaunches
+  `peripherals depth_camera.launch.py` when no image has arrived for 20 s (at most once per 2 min). Under protocol v2 such a
+  gap invalidates the affected trial and inserts 3 s of grey; it cannot silently enter a result.

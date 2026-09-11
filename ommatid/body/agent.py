@@ -50,6 +50,7 @@ class Body(Node):
     def __init__(self):
         super().__init__("ommatid_body")
         self.lock = threading.Lock()
+        self.started = time.time()
         self.rgb = None; self.rgb_ts = 0.0; self.rgb_stamp = 0.0
         self.battery_v = None; self.yaw = None
         self.scan_front = None; self.scan_ts = 0.0; self.scan_meta = None
@@ -67,6 +68,8 @@ class Body(Node):
         self._halt()
         self._cam_timer = self.create_timer(2.0, self._aim_camera_once)
         self.create_timer(0.1, self._drive)
+        self.last_cam_relaunch = 0.0
+        self.create_timer(5.0, self._camera_watchdog)
         self.next_send = time.time()
         for i in range(SENDERS):
             threading.Thread(target=self._sender, name=f"brain-sender-{i}", daemon=True).start()
@@ -95,6 +98,20 @@ class Body(Node):
     def _aim_camera_once(self):
         self._aim_camera(); self.destroy_timer(self._cam_timer)
         self.create_timer(30.0, self._aim_camera)      # and re-assert every 30 s in case the stock stack moved the arm
+
+    def _camera_watchdog(self):
+        """The Aurora 930 occasionally drops off USB and its ROS driver dies with it. If no image has arrived for 20 s,
+        relaunch the stock depth-camera launch file (at most once every 2 minutes)."""
+        import subprocess
+        now = time.time()
+        if (self.rgb_ts and now - self.rgb_ts < 20.0) or (not self.rgb_ts and now - self.started < 60.0):
+            return
+        if now - self.last_cam_relaunch < 120.0:
+            return
+        self.last_cam_relaunch = now; self.stats["cam_relaunches"] = self.stats.get("cam_relaunches", 0) + 1
+        subprocess.Popen(["/bin/zsh", "-c", "pkill -f aurora930_node; sleep 2; source ~/.zshrc >/dev/null 2>&1; "
+                          "exec ros2 launch peripherals depth_camera.launch.py >> /tmp/depth_cam_relaunch.log 2>&1"],
+                         cwd=os.path.expanduser("~"))
 
     def _aim_camera(self):
         m = ServosPosition(); m.duration = 1.0; m.position_unit = "pulse"
@@ -137,7 +154,7 @@ class Body(Node):
                 "lidar_age_ms": round((time.time() - self.scan_ts) * 1000) if self.scan_ts else None, "lidar": self.scan_meta,
                 "frames": self.stats["frames"], "lease_stops": self.stats["lease_stops"], "obstacle_blocks": self.stats["obstacle_blocks"],
                 "stale_cmds": self.stats["stale_cmds"], "moving": self.moving, "errors": self.stats["errors"],
-                "last_error": self.stats["last_error"], "post_ms": self.stats.get("post_ms"), "send_ms": self.stats.get("send_ms"), "encode_ms": self.stats.get("encode_ms"), "reconnects": self.stats.get("reconnects", 0)}
+                "last_error": self.stats["last_error"], "post_ms": self.stats.get("post_ms"), "send_ms": self.stats.get("send_ms"), "encode_ms": self.stats.get("encode_ms"), "reconnects": self.stats.get("reconnects", 0), "cam_relaunches": self.stats.get("cam_relaunches", 0)}
         u = urlsplit(BRAIN_URL)
         if conn[0] is None:
             self.stats["reconnects"] = self.stats.get("reconnects", 0) + 1
