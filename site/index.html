@@ -24,7 +24,7 @@
 <div class="live-grid">
   <div class="stack">
     <figure class="plate corner">
-      <header><b>Plate I</b> — the specimen <span id="legend">165,122 neurons at measured soma positions · front view · brain above, nerve cord below</span></header>
+      <header><span class="t"><b>Plate I</b> — the specimen</span> <span id="legend">165,122 neurons at measured soma positions · front view · brain above, nerve cord below</span></header>
       <div id="map-wrap">
         <canvas id="map"></canvas>
         <div class="dim" style="left:12px;top:10px">◄ fly's right</div>
@@ -35,7 +35,7 @@
     </figure>
 
     <figure class="plate">
-      <header><b>Plate II</b> — chart recorder <span>descending neurons · smoothed 200 ms · last 60 s</span></header>
+      <header><span class="t"><b>Plate II</b> — chart recorder</span> <span>descending neurons · smoothed 200 ms · last 60 s</span></header>
       <div class="body" style="padding:6px 8px 4px"><canvas id="strip"></canvas></div>
       <figcaption>Pen traces of the neurons a fly walks with. <span style="color:var(--red)">Red</span>: DNp04, the looming-escape neuron. Black: DNa02 left (solid) and right (dashed), steering. Grey: DNp02. When the traces are flat the room is not asking the fly anything.</figcaption>
     </figure>
@@ -43,7 +43,7 @@
 
   <div class="stack">
     <figure class="plate">
-      <header><b>Plate III</b> — what it sees <span>camera 74° → two retinas of 721 columns</span></header>
+      <header><span class="t"><b>Plate III</b> — what it sees</span> <span>camera 74° → two retinas of 721 columns</span></header>
       <div class="body">
         <img id="cam" alt="the robot's camera">
         <div class="eyes" style="margin-top:10px">
@@ -54,12 +54,12 @@
     </figure>
 
     <figure class="plate">
-      <header><b>Plate IV</b> — descending neurons <span>Hz per neuron · bar full at 200</span></header>
+      <header><span class="t"><b>Plate IV</b> — descending neurons</span> <span>Hz per neuron · bar full at 200</span></header>
       <div class="body"><div class="rows" id="dn"></div></div>
     </figure>
 
     <figure class="plate">
-      <header><b>Plate V</b> — command to the body</header>
+      <header><span class="t"><b>Plate V</b> — command to the body</span></header>
       <div class="body cmd">
         <svg viewBox="-36 -36 72 72" aria-hidden="true">
           <circle r="32" fill="none" stroke="#16140f" stroke-width="1"/>
@@ -72,7 +72,7 @@
     </figure>
 
     <figure class="plate">
-      <header><b>Plate VI</b> — state</header>
+      <header><span class="t"><b>Plate VI</b> — state</span></header>
       <div class="body"><div class="kv" id="kv"></div></div>
     </figure>
   </div>
@@ -189,7 +189,7 @@ function drawEye(cv, vals, mirror){
   if (!vals) return;
   const k = S/420, r = 5.4*k;
   for (let i=0;i<HEX.length && i<vals.length;i++){ const [u,v]=HEX[i]; let x = 13*v, y = 12.97*u+6.49*v; if (mirror) x = -x;
-    const g = Math.round(235 - 215*Math.max(0,Math.min(1,vals[i]))); c.fillStyle = `rgb(${g},${g-2},${g-6})`; c.beginPath(); c.arc(S/2 + x*k, S/2 + y*k, r, 0, 6.283); c.fill(); }
+    const g = Math.round(24 + 205*Math.max(0,Math.min(1,vals[i]))); c.fillStyle = `rgb(${g},${g-2},${g-6})`; c.beginPath(); c.arc(S/2 + x*k, S/2 + y*k, r, 0, 6.283); c.fill(); }
 }
 
 // ---------- telemetry ----------
