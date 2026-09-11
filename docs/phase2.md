@@ -86,3 +86,10 @@ plasticity-off control.
   563 neurons injected in total. Side inference from one-hop output partners has median confidence 0.66–0.74 (many leg
   sensory neurons project to both sides), so the per-leg pools are approximate; the perturbation test (P2-b) will show
   whether the mapping is good enough to produce a same-leg reflex.
+
+## 8. First smoke result (2026-09-11, synthetic body, exploratory — not a trial)
+With the real graph, the visual pipeline on a grey frame, and a synthetic body reporting the standing pose except the
+left-front tibia held 19° flexed, the leg motor pools fire for the first time: mid-left coxa promotors 149 Hz, mid-left
+tibia extensors 191 Hz, mid-right coxa 127 Hz, hind-leg pools 20–30 Hz, left-front femur antagonists 32 Hz. A single
+perturbed joint produces motor output mostly on OTHER legs (intersegmental), which is exactly what P2-b is designed to
+quantify. The 18 servo targets that result would move several joints by 20–30°, so the first real trials are on a stand.
