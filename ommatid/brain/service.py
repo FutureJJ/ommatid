@@ -206,9 +206,11 @@ def make_app(svc: BrainService, token: str) -> web.Application:
         return web.Response(body=code.tobytes(), content_type="application/octet-stream",
                             headers={"Cache-Control": "public, max-age=86400"})
 
+    STIM_PAGE_VERSION = 2          # bump when site/stimulus.html changes; the page reloads itself when it sees a newer version
+
     async def stim_state(req):
         with svc.lock: st = dict(svc.stim)
-        st["server_ts"] = time.time()
+        st["server_ts"] = time.time(); st["page_version"] = STIM_PAGE_VERSION
         return web.json_response(st, headers={"Cache-Control": "no-store", "Access-Control-Allow-Origin": "*"})
 
     async def stim_ack(req):
@@ -223,12 +225,12 @@ def make_app(svc: BrainService, token: str) -> web.Application:
         svc.protocol = Protocol(trials_per_condition=int(q.get("trials_per_condition", 30)), seed=int(q.get("seed", 2026)),
                                 note=str(q.get("note", "")))
         svc.protocol.start(svc.brain.t_ms)
-        svc.log.flush()
+        svc.log.flush(); svc.display_log.flush()
         return web.json_response(svc.protocol.status())
 
     async def protocol_stop(req):
         if token and req.headers.get("Authorization") != f"Bearer {token}": raise web.HTTPUnauthorized()
-        svc.protocol.stop(); svc.log.flush()
+        svc.protocol.stop(); svc.log.flush(); svc.display_log.flush()
         return web.json_response(svc.protocol.status())
 
     async def protocol_status(req): return web.json_response(svc.protocol.status())
