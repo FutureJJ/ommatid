@@ -72,3 +72,11 @@ setup; the candidate causes are measured mismatches (41° of a 300° field; a tr
 activity for disinhibition; a single steering DN as readout) and are the targets of the v2 protocol and of phases 2–3.
 Pre-registered v2 amendments: fade-in static disc; ≥ 2 s baseline; hand-off gain calibrated to HS-cell physiology;
 a wider pre-registered DN panel for turning; C2 scrambled-sign run.
+
+## v1 run 3 — 2026-09-11 12:39 UTC, C2 scrambled signs
+- same protocol, seed 2026, same laptop 30 cm @ 40 cm; graph `build/graph_scrambled.npz` (E/I labels permuted across neurons,
+  seed 2026), sha256 prefix e1fd52515539, verified in the service state before the start
+- lighting differs from runs 1–2: the room is now dark (evening), the laptop screen is the main light source. This is a
+  confound for any cross-run comparison beyond the pre-registered contrasts and is recorded here.
+- first observation: with scrambled signs the network is hyperactive — ≈ 158,000 spikes per 20 ms at rest versus ≈ 28,500 on the
+  real wiring — i.e. the connectome's excitation/inhibition assignment is what keeps the real network in a stable regime
