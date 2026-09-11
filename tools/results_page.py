@@ -1,12 +1,12 @@
 """Build site/results.html from the archived runs: every number and every chart on the page comes from the Parquet logs
 and the per-trial tables in runs/. Static HTML with inline SVG; no JavaScript, no chart library.
 
-usage: python tools/results_page.py runs/logs/original runs/logs/shuffled
+usage: python tools/results_page.py runs/data/original runs/data/shuffled [runs/data/original-v2-41deg-107trials]
 """
 import sys, glob, html, numpy as np, pandas as pd
 from pathlib import Path
 sys.path.insert(0, ".")
-from tools.analyze import load, per_trial, ci, perm_test
+from tools.analyze import load, per_trial, ci, perm_test, load_display, relabel_frame_locked
 
 ROOT = Path(__file__).resolve().parent.parent
 INK, INK2, INK3, LINE, EYE = "#16140f", "#5a554b", "#948e82", "rgba(22,20,15,.14)", "#c9321f"
@@ -96,8 +96,25 @@ def chart_trials(t_o, t_s, col="d_escape", ylabel="escape/stop rise, Hz", conds=
     out.append("</svg>"); return "\n".join(out)
 
 
-def main(orig_dir, shuf_dir):
+def main(orig_dir, shuf_dir, v2_dir=None):
     df_o, df_s = load(orig_dir), load(shuf_dir)
+    # protocol v2 (frame-locked): the archived 108-trial run, analysed exactly as pre-registered (tools/analyze.py --mode v2)
+    t_v2 = None
+    if v2_dir:
+        d2 = relabel_frame_locked(load(v2_dir), load_display(v2_dir)); t2 = per_trial(d2, "v2"); t_v2 = t2[t2.valid]
+        v2_gR, v2_gL = t_v2[t_v2.condition == "grating_R"], t_v2[t_v2.condition == "grating_L"]
+        v2_h1 = np.concatenate([(v2_gR.d_turn > 0).values, (v2_gL.d_turn < 0).values]).mean()
+        v2_bR, v2_bL = t_v2[t_v2.condition == "bright_R"], t_v2[t_v2.condition == "bright_L"]
+        v2_h3 = np.concatenate([(v2_bR.d_turn > 0).values, (v2_bL.d_turn < 0).values]).mean()
+        v2_lo = t_v2[t_v2.condition == "loom"]; v2_h2 = v2_lo.h2_onset_ok.mean()
+        v2_grey = t_v2[t_v2.condition == "grey"]; v2_nongrey = t_v2[t_v2.condition != "grey"]
+        v2_p_shift = perm_test(v2_nongrey.d_turn, v2_grey.d_turn)
+        def v2row(c):
+            a = t_v2[t_v2.condition == c]
+            if not len(a): return ""
+            lo, hi = ci(a.d_turn)
+            return f"<tr><td>{COND_LABEL[c]}</td><td class=n>{len(a)}</td><td class=n>{a.d_turn.mean():+.1f} [{lo:+.1f}, {hi:+.1f}]</td><td class=n>{a.d_escape.mean():+.1f}</td><td class=n>{a.h2_onset_ok.mean()*100:.0f} %</td><td class=n>{a.spikes_stim.mean():,.0f} / {a.spikes_base.mean():,.0f}</td></tr>"
+        v2_table = "\n".join(v2row(c) for c in ORDER_ALL)
     df_o, df_s = df_o[df_o.protocol_seed == 2026], df_s[df_s.protocol_seed == 2026]
     t_o_all, t_s_all = per_trial(df_o), per_trial(df_s)
     t_o, t_s = t_o_all[t_o_all.valid], t_s_all[t_s_all.valid]          # trials with any no-frame step are excluded (review finding 3)
@@ -122,9 +139,9 @@ def main(orig_dir, shuf_dir):
 
     page = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ommatid — results</title><link rel="stylesheet" href="/style.css?v=7"></head><body><div class="page">
-<div class="tb"><div class="name"><h1>OMMATID<small>Results, phase 1 · protocol v1 · 11 September 2026</small></h1></div>
-<div class="cells"><div class="cell"><small>valid trials</small><b>{len(t_o)} + {len(t_s)}</b> of 210 + 210</div><div class="cell"><small>real wiring</small><b>{spikes_o:,.0f}</b> sp/20 ms</div><div class="cell"><small>shuffled wiring</small><b>{spikes_s:,.0f}</b> sp/20 ms</div><div class="cell"><small>freeze</small><b>v1</b></div></div></div>
+<title>Ommatid — results</title><link rel="stylesheet" href="/style.css?v=8"></head><body><div class="page">
+<div class="tb"><div class="name"><h1>OMMATID<small>Results, phase 1 · protocols v1 and v2 · 11 September 2026</small></h1></div>
+<div class="cells"><div class="cell"><small>valid trials</small><b>{len(t_o)} + {len(t_s)}</b> of 210 + 210</div><div class="cell"><small>real wiring</small><b>{spikes_o:,.0f}</b> sp/20 ms</div><div class="cell"><small>shuffled wiring</small><b>{spikes_s:,.0f}</b> sp/20 ms</div><div class="cell"><small>v2 valid trials</small><b>{len(t_v2) if t_v2 is not None else "—"}</b> of 240 planned</div></div></div>
 <nav class="tabs"><a href="/">Live</a><a class="on" href="/results">Results</a><a href="/see">Fly's eye</a><a href="https://github.com/FutureJJ/ommatid/blob/main/docs/experiment.md">Pre-registration</a><a href="https://github.com/FutureJJ/ommatid/blob/main/docs/runs.md">Run log</a><a href="https://github.com/FutureJJ/ommatid">Source</a></nav>
 <section class="prose" style="margin-top:40px">
 <p class="lede">Phase 1, protocol v1: none of the three hypotheses is established, and the one signal we saw turned out to be an artefact of our own rendering. This page keeps the numbers and says what they were.</p>
@@ -146,6 +163,25 @@ def main(orig_dir, shuf_dir):
 <figure class="plate"><header><span class="t"><b>Plate IX</b> — steering asymmetry, every trial</span> <span>DNa02 right − left</span></header><div class="body">{chart_trials(t_o, t_s, "d_turn", "steering asymmetry DNa02 right − left, Hz")}</div>
 <figcaption>The optomotor and phototaxis readout, same layout. Nothing separates the conditions, on either wiring.</figcaption></figure>
 
+{"" if t_v2 is None else f"""<section class="prose" style="margin-top:56px">
+<h2>Protocol v2 — frame-locked, calibrated, stopped at {len(t_v2)} trials</h2>
+<p>The review's fixes were applied and frozen (<a href="https://github.com/FutureJJ/ommatid/blob/main/docs/frozen-params-v2.md">freeze-v2</a>): the input map built once from the original anatomy and shared by every graph; a fixed-grey surround; the hand-off gain set by a pre-registered calibration to HS-cell physiology (100 Hz per unit); the display acknowledging every change so each brain step is labelled with what was actually on screen when its frame was captured; a 2 s baseline, a fade-in disc and a receding disc as controls. Screen 41° × 30° in a dark room. The operator stopped the run at trial 107 of 240 to move to phase 2, so the table is exploratory by sample size, not by method: {len(t_v2)} valid trials, no interruptions, no excluded trials.</p>
+<div class="wrap"><table><tr><th>condition</th><th class=n>trials</th><th class=n>turn R−L, Hz [95 % CI]</th><th class=n>escape rise, Hz</th><th class=n>onset ≤ 200 ms</th><th class=n>spikes stim / base</th></tr>
+{v2_table}</table></div>
+<p style="font-size:15px;color:var(--ink3)">Per neuron, stimulus minus the trial's own baseline. Onset: first of two consecutive steps with any escape/stop neuron above baseline mean + 2 SD, within 200 ms of the fly's time — the pre-registered H2 test.</p>
+<p><b>What v2 says.</b> The looming detectors stayed silent in every trial: no escape or stop descending neuron fired above baseline, in any condition, so H2 is 0 % against a 70 % criterion. Steering did move, but not with direction: every stimulus, whatever its kind or side, shifted the DNa02 asymmetry to the right by 3–7 Hz, while grey trials did not (all stimuli vs grey, p = {pfmt(v2_p_shift)}). H1 sign agreement {v2_h1*100:.0f} %, H3 {v2_h3*100:.0f} %; both required 80 %. A diagnosis on an emulation of the rig found why the loom does nothing: under one global gain the injected medulla activity leaves LC4 under net inhibition, and raising the gain until the loom reaches DNp04 also raises its background. That is a v3 design question — per-cell-type scaling of the optic-lobe hand-off — to be pre-registered before any trial, not tuned on this data.</p>
+</section>
+<div class="verdicts">
+<figure class="plate corner"><header><span class="t"><b>Verdict 5</b> — v2, H2 looming (onset criterion)</span> <span class="stamp miss">not met</span></header><div class="body">Onset within 200 ms in <b>{v2_h2*100:.0f} %</b> of {len(v2_lo)} loom trials (≥ 70 % required). Escape and stop descending neurons: 0 Hz in all {len(t_v2)} trials.</div></figure>
+<figure class="plate"><header><span class="t"><b>Verdict 6</b> — v2, H1 optomotor and H3 phototaxis</span> <span class="stamp miss">not met</span></header><div class="body">Turn direction followed the grating in {v2_h1*100:.0f} % and the bright side in {v2_h3*100:.0f} % of trials (≥ 80 % required). The steering shift is a non-specific onset response of the right DNa02, present for every stimulus and absent for grey.</div></figure>
+</div>"""}
+
+<section class="prose" style="margin-top:56px">
+<h2>Phase 2 — the nerve cord and the legs (in progress)</h2>
+<p>The robot's gait controller is out of the loop. The fly's 266 leg motor neurons, grouped into agonist and antagonist pools by the muscle each one drives in the animal, now compute a target angle for each of the 18 servos on every step, and the robot's joint positions feed 563 of the fly's own leg proprioceptors (chordotonal organs, hair plates, campaniform sensilla, halteres). All of this is live on the <a href="/">specimen page</a>, Plate VII, with the body held still: what the fly's nerve cord would do with these legs is computed, logged and drawn, not yet applied.</p>
+<p>The first measurement, <b>P2-a</b>, is pre-registered (<a href="https://github.com/FutureJJ/ommatid/blob/main/docs/phase2.md">design, §10</a>; <a href="https://github.com/FutureJJ/ommatid/blob/main/docs/frozen-params-p2.md">frozen parameters</a>, tag <code>freeze-p2a</code>): does the untouched nerve cord produce any leg motor output in this body, does the static report of the standing pose change it, and is the pattern specific to the real wiring? It runs with the body standing still; its result, met or not, will appear here.</p>
+</section>
+
 <section class="prose">
 <h2>Per condition</h2>
 <div class="wrap"><table><tr><th>condition</th><th class=n>trials</th><th class=n>escape rise, real</th><th class=n>escape rise, shuffled</th><th class=n>turn R−L, real</th><th class=n>turn R−L, shuffled</th></tr>
@@ -163,4 +199,4 @@ def main(orig_dir, shuf_dir):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2])
+    main(sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else None)

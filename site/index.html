@@ -313,6 +313,7 @@ function apply(s){
     ['optic lobes', act['optic lobe']!=null ? `${act['optic lobe']} / ${tot['optic lobe']}` : '—'], ['central brain', act['central brain']!=null ? `${act['central brain']} / ${tot['central brain']}` : '—'], ['nerve cord', act['nerve cord']!=null ? `${act['nerve cord']} / ${tot['nerve cord']}` : '—'],
     ['battery', b.battery_v ? fmt(b.battery_v,2)+' V' : '—'], ['lidar ahead', b.lidar_front_m ? fmt(b.lidar_front_m,2)+' m' : '—'], ['heading', b.yaw_deg!=null ? fmt(b.yaw_deg,0)+'°' : '—'],
     ['optic lobe · brain', `${fmt(s.flyvis_ms,0)} · ${fmt(s.lif_ms,0)} ms`], ['protocol', st.trial!=null ? `trial ${st.trial} · ${st.condition} · ${st.phase}` : 'idle (free viewing)'], ['graph sha', s.graph_sha || '—'],
+    ...(s.proprio_on!=null ? [['leg feedback', s.proprio_on ? 'on · joints → proprioceptors' : 'off (P2-a arm)']] : []),
   ].map(([k,v])=>`<div><small>${k}</small>${v==null?'—':v}</div>`).join('');
 }
 function connect(){

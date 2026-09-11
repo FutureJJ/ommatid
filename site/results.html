@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ommatid — results</title><link rel="stylesheet" href="/style.css?v=7"></head><body><div class="page">
-<div class="tb"><div class="name"><h1>OMMATID<small>Results, phase 1 · protocol v1 · 11 September 2026</small></h1></div>
-<div class="cells"><div class="cell"><small>valid trials</small><b>193 + 205</b> of 210 + 210</div><div class="cell"><small>real wiring</small><b>28,624</b> sp/20 ms</div><div class="cell"><small>shuffled wiring</small><b>9,624</b> sp/20 ms</div><div class="cell"><small>freeze</small><b>v1</b></div></div></div>
+<title>Ommatid — results</title><link rel="stylesheet" href="/style.css?v=8"></head><body><div class="page">
+<div class="tb"><div class="name"><h1>OMMATID<small>Results, phase 1 · protocols v1 and v2 · 11 September 2026</small></h1></div>
+<div class="cells"><div class="cell"><small>valid trials</small><b>193 + 205</b> of 210 + 210</div><div class="cell"><small>real wiring</small><b>28,624</b> sp/20 ms</div><div class="cell"><small>shuffled wiring</small><b>9,624</b> sp/20 ms</div><div class="cell"><small>v2 valid trials</small><b>108</b> of 240 planned</div></div></div>
 <nav class="tabs"><a href="/">Live</a><a class="on" href="/results">Results</a><a href="/see">Fly's eye</a><a href="https://github.com/FutureJJ/ommatid/blob/main/docs/experiment.md">Pre-registration</a><a href="https://github.com/FutureJJ/ommatid/blob/main/docs/runs.md">Run log</a><a href="https://github.com/FutureJJ/ommatid">Source</a></nav>
 <section class="prose" style="margin-top:40px">
 <p class="lede">Phase 1, protocol v1: none of the three hypotheses is established, and the one signal we saw turned out to be an artefact of our own rendering. This page keeps the numbers and says what they were.</p>
@@ -978,6 +978,32 @@
 <text x="744.0" y="28.0" fill="#948e82" text-anchor="end" font-size="11" font-weight="normal" font-style="italic">steering asymmetry DNa02 right − left, Hz</text>
 </svg></div>
 <figcaption>The optomotor and phototaxis readout, same layout. Nothing separates the conditions, on either wiring.</figcaption></figure>
+
+<section class="prose" style="margin-top:56px">
+<h2>Protocol v2 — frame-locked, calibrated, stopped at 108 trials</h2>
+<p>The review's fixes were applied and frozen (<a href="https://github.com/FutureJJ/ommatid/blob/main/docs/frozen-params-v2.md">freeze-v2</a>): the input map built once from the original anatomy and shared by every graph; a fixed-grey surround; the hand-off gain set by a pre-registered calibration to HS-cell physiology (100 Hz per unit); the display acknowledging every change so each brain step is labelled with what was actually on screen when its frame was captured; a 2 s baseline, a fade-in disc and a receding disc as controls. Screen 41° × 30° in a dark room. The operator stopped the run at trial 107 of 240 to move to phase 2, so the table is exploratory by sample size, not by method: 108 valid trials, no interruptions, no excluded trials.</p>
+<div class="wrap"><table><tr><th>condition</th><th class=n>trials</th><th class=n>turn R−L, Hz [95 % CI]</th><th class=n>escape rise, Hz</th><th class=n>onset ≤ 200 ms</th><th class=n>spikes stim / base</th></tr>
+<tr><td>looming disc</td><td class=n>12</td><td class=n>+2.9 [+1.1, +4.7]</td><td class=n>+0.0</td><td class=n>0 %</td><td class=n>24,453 / 24,710</td></tr>
+<tr><td>static disc</td><td class=n>13</td><td class=n>+2.7 [+0.6, +4.8]</td><td class=n>+0.0</td><td class=n>0 %</td><td class=n>24,486 / 24,707</td></tr>
+<tr><td>receding disc</td><td class=n>9</td><td class=n>+4.5 [+2.3, +6.6]</td><td class=n>+0.0</td><td class=n>0 %</td><td class=n>24,394 / 24,701</td></tr>
+<tr><td>grating → right</td><td class=n>17</td><td class=n>+6.0 [+4.6, +7.3]</td><td class=n>+0.0</td><td class=n>0 %</td><td class=n>24,143 / 24,717</td></tr>
+<tr><td>grating → left</td><td class=n>20</td><td class=n>+5.6 [+4.3, +6.9]</td><td class=n>+0.0</td><td class=n>0 %</td><td class=n>24,136 / 24,702</td></tr>
+<tr><td>bright right half</td><td class=n>14</td><td class=n>+7.4 [+5.7, +9.1]</td><td class=n>+0.0</td><td class=n>0 %</td><td class=n>24,220 / 24,705</td></tr>
+<tr><td>bright left half</td><td class=n>10</td><td class=n>+3.8 [+0.9, +6.7]</td><td class=n>+0.0</td><td class=n>0 %</td><td class=n>24,225 / 24,705</td></tr>
+<tr><td>grey</td><td class=n>13</td><td class=n>+0.2 [-2.0, +2.3]</td><td class=n>+0.0</td><td class=n>0 %</td><td class=n>24,683 / 24,700</td></tr></table></div>
+<p style="font-size:15px;color:var(--ink3)">Per neuron, stimulus minus the trial's own baseline. Onset: first of two consecutive steps with any escape/stop neuron above baseline mean + 2 SD, within 200 ms of the fly's time — the pre-registered H2 test.</p>
+<p><b>What v2 says.</b> The looming detectors stayed silent in every trial: no escape or stop descending neuron fired above baseline, in any condition, so H2 is 0 % against a 70 % criterion. Steering did move, but not with direction: every stimulus, whatever its kind or side, shifted the DNa02 asymmetry to the right by 3–7 Hz, while grey trials did not (all stimuli vs grey, p = &lt; 0.0001). H1 sign agreement 46 %, H3 67 %; both required 80 %. A diagnosis on an emulation of the rig found why the loom does nothing: under one global gain the injected medulla activity leaves LC4 under net inhibition, and raising the gain until the loom reaches DNp04 also raises its background. That is a v3 design question — per-cell-type scaling of the optic-lobe hand-off — to be pre-registered before any trial, not tuned on this data.</p>
+</section>
+<div class="verdicts">
+<figure class="plate corner"><header><span class="t"><b>Verdict 5</b> — v2, H2 looming (onset criterion)</span> <span class="stamp miss">not met</span></header><div class="body">Onset within 200 ms in <b>0 %</b> of 12 loom trials (≥ 70 % required). Escape and stop descending neurons: 0 Hz in all 108 trials.</div></figure>
+<figure class="plate"><header><span class="t"><b>Verdict 6</b> — v2, H1 optomotor and H3 phototaxis</span> <span class="stamp miss">not met</span></header><div class="body">Turn direction followed the grating in 46 % and the bright side in 67 % of trials (≥ 80 % required). The steering shift is a non-specific onset response of the right DNa02, present for every stimulus and absent for grey.</div></figure>
+</div>
+
+<section class="prose" style="margin-top:56px">
+<h2>Phase 2 — the nerve cord and the legs (in progress)</h2>
+<p>The robot's gait controller is out of the loop. The fly's 266 leg motor neurons, grouped into agonist and antagonist pools by the muscle each one drives in the animal, now compute a target angle for each of the 18 servos on every step, and the robot's joint positions feed 563 of the fly's own leg proprioceptors (chordotonal organs, hair plates, campaniform sensilla, halteres). All of this is live on the <a href="/">specimen page</a>, Plate VII, with the body held still: what the fly's nerve cord would do with these legs is computed, logged and drawn, not yet applied.</p>
+<p>The first measurement, <b>P2-a</b>, is pre-registered (<a href="https://github.com/FutureJJ/ommatid/blob/main/docs/phase2.md">design, §10</a>; <a href="https://github.com/FutureJJ/ommatid/blob/main/docs/frozen-params-p2.md">frozen parameters</a>, tag <code>freeze-p2a</code>): does the untouched nerve cord produce any leg motor output in this body, does the static report of the standing pose change it, and is the pattern specific to the real wiring? It runs with the body standing still; its result, met or not, will appear here.</p>
+</section>
 
 <section class="prose">
 <h2>Per condition</h2>
