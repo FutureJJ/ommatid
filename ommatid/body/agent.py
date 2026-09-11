@@ -15,6 +15,7 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from geometry_msgs.msg import Twist
 from kinematics_msgs.msg import Traveling
+from servo_controller_msgs.msg import ServoPosition, ServosPosition
 from interfaces.msg import RunActionSet
 from sensor_msgs.msg import Image, Imu, LaserScan
 from std_msgs.msg import UInt16
@@ -28,6 +29,7 @@ BATTERY_FLOOR_V = 10.3
 MAX_LINEAR = 0.08       # m/s, stock clamp is 0.12
 MAX_YAW = 0.5           # rad/s, stock clamp is 0.6
 DRY_RUN = os.environ.get("OMMATID_DRY_RUN", "1") == "1"   # 1: talk to the brain but publish zero velocity
+CAM_TILT = float(os.environ.get("OMMATID_CAM_TILT", "275"))  # arm joint 4 (servo 22) pulse; 150 = floor, 275 ≈ 30° up = room
 
 
 def clamp(v, lo, hi): return max(lo, min(hi, v))
@@ -48,8 +50,18 @@ class Body(Node):
         self.pub_vel = self.create_publisher(Twist, "/controller/cmd_vel", 5)
         self.pub_travel = self.create_publisher(Traveling, "/controller/traveling", 5)
         self.pub_action = self.create_publisher(RunActionSet, "/controller/run_actionset", 5)
+        self.pub_servo = self.create_publisher(ServosPosition, "/servo_controller", 5)
         self.moving = False
         self._halt()   # make sure the gait engine is idle at start
+        self._cam_timer = self.create_timer(2.0, self._aim_camera_once)
+
+    def _aim_camera_once(self):
+        """Tilt the camera to look at the room rather than the floor (the stock rest pose looks down)."""
+        m = ServosPosition(); m.duration = 1.0; m.position_unit = "pulse"
+        m.position = [ServoPosition(id=22, position=float(clamp(CAM_TILT, 0, 1000)))]
+        self.pub_servo.publish(m)
+        self.destroy_timer(self._cam_timer) if hasattr(self, "_cam_timer") else None
+        self.stats["cam_tilt"] = CAM_TILT
         self.create_timer(PERIOD_S, self._tick)
         self.create_timer(0.1, self._drive)
 
