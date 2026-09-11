@@ -3,17 +3,20 @@
 Inputs  (data/): body-annotations.feather, body-neurotransmitters.feather, connectome-weights.feather (traced-only)
 Output  (build/graph.npz): W as CSR (rows = postsynaptic, cols = presynaptic, mV per presynaptic spike) + per-neuron metadata.
 
-Sign convention: Shiu et al. 2024 (Nature) — acetylcholine excitatory, GABA and glutamate inhibitory, histamine inhibitory,
-monoamines modulatory → zero fast weight. Pairs with fewer than MIN_SYN synapses are dropped as reconstruction noise.
+Sign convention: Shiu et al. 2024 (Nature) — GABA and glutamate inhibitory, everything else excitatory (their rule), plus
+histamine inhibitory. Pairs with fewer than MIN_SYN synapses are dropped.
 """
 from pathlib import Path
 import numpy as np, pandas as pd, scipy.sparse as sp
 import pyarrow.feather as pf, pyarrow.compute as pc
 
 MV_PER_SYNAPSE = 0.275
-MIN_SYN = 3
+MIN_SYN = 5   # FlyWire Codex public tables (the paper's source) are thresholded at 5 synapses
+# Shiu et al. 2024: a neuron is inhibitory if its presynaptic sites are predominantly GABA or glutamate, otherwise
+# excitatory — dopamine, octopamine and serotonin were treated as excitatory. Histamine (photoreceptors, absent from the
+# paper's dataset) is inhibitory at fly photoreceptor synapses. Unclear/unknown follow the paper's default: excitatory.
 SIGN = {"acetylcholine": 1.0, "gaba": -1.0, "glutamate": -1.0, "histamine": -1.0,
-        "dopamine": 0.0, "octopamine": 0.0, "serotonin": 0.0, "unclear": 0.0, "unknown": 0.0}
+        "dopamine": 1.0, "octopamine": 1.0, "serotonin": 1.0, "unclear": 1.0, "unknown": 1.0}
 ROOT = Path(__file__).resolve().parent.parent
 DATA, BUILD = ROOT / "data", ROOT / "build"
 
@@ -41,7 +44,7 @@ def main():
 
     idx = pd.Series(np.arange(n, dtype=np.int32), index=bodies)
     nt_str = nt.set_index("body")["consensus_nt"].reindex(bodies).fillna("unknown").str.lower().to_numpy().astype("U24")
-    sign = np.array([SIGN.get(s, 0.0) for s in nt_str], dtype=np.float32)
+    sign = np.array([SIGN.get(s, 1.0) for s in nt_str], dtype=np.float32)
     ann_i = ann.drop_duplicates("bodyId").set_index("bodyId")
     col = lambda c: ann_i[c].reindex(bodies).fillna("").to_numpy().astype(str) if c in ann_i else np.full(n, "", dtype=str)
 
