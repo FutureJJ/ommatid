@@ -78,6 +78,15 @@ def report(t, ctrl=None):
         thr = 5.0
         print(f"H2 looming: escape/stop rise > {thr} Hz in {(lo_.d_escape > thr).mean()*100:.0f}% of loom trials (criterion ≥ 70%), "
               f"in {(di.d_escape > thr).mean()*100:.0f}% of disc/grating controls (criterion < 20%); loom vs controls p = {perm_test(lo_.d_escape, di.d_escape):.4f}")
+        for k in ["DNp04", "DNp02", "DNp01", "DNp09", "MDN"]:
+            lo, hi = ci(lo_[f"d_{k}"]); print(f"    loom Δ{k}: {lo_[f'd_{k}'].mean():+.1f} Hz [{lo:+.1f}, {hi:+.1f}]")
+        if ctrl is not None:
+            clo = ctrl[ctrl.condition == "loom"]
+            print(f"    vs control graph: loom escape rise {lo_.d_escape.mean():+.1f} vs {clo.d_escape.mean():+.1f} Hz, permutation p = {perm_test(lo_.d_escape, clo.d_escape):.4f} (criterion < 0.01)")
+            # is the rise specific to the escape neurons, or just proportional to how much the whole network sped up?
+            g = (lo_.spikes_stim - lo_.spikes_base).mean(); cg = (clo.spikes_stim - clo.spikes_base).mean()
+            print(f"    whole-network rise during loom: {g:+.0f} vs {cg:+.0f} spikes per 20 ms; escape rise per 1000 extra spikes: "
+                  f"{lo_.d_escape.mean()/max(g,1)*1000:.1f} vs {clo.d_escape.mean()/max(cg,1)*1000:.1f} Hz")
     bR, bL, gr = t[t.condition == "bright_R"], t[t.condition == "bright_L"], t[t.condition == "grey"]
     if len(bR) and len(bL):
         agree = np.concatenate([(bR.d_turn > 0).values, (bL.d_turn < 0).values]).mean()

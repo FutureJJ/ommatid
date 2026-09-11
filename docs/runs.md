@@ -41,3 +41,34 @@ Interpretation is deferred to the control-graph runs (C1 shuffled wiring, C2 scr
   the previous service build, which ignored the graph setting. It was stopped; its rows (ts ≥ 1789125979) are quarantined in
   `logs/original-aborted/` and excluded from every analysis. Logs are now written per variant (`logs/original/`, `logs/shuffled/`).
 - first observation: whole-network activity on the shuffled graph is about a third of the original's (≈ 9,700 vs ≈ 28,500 spikes per 20 ms) under the same input
+
+### Result (analysed 12:20 UTC, 210 trials, `tools/analyze.py logs/original --control logs/shuffled --seed 2026`)
+
+| condition | n | Δ escape/stop Hz, shuffled wiring | (original, for comparison) | spikes stim / baseline |
+|---|---|---|---|---|
+| loom | 30 | +4.6 | +13.6 | 10,315 / 9,744 |
+| disc (static) | 30 | +3.0 | +9.2 | 9,769 / 9,607 |
+| gratings | 60 | +1.6 | +0.3 | ≈ 9,400 / 9,800 |
+| bright halves | 60 | +1.6 | +0.4 | ≈ 9,100 / 9,600 |
+| grey | 30 | +4.4 | +4.5 | 10,122 / 9,632 |
+
+Original vs shuffled, pre-registered contrast (criterion p < 0.01):
+- **H2 looming: met.** Loom-evoked escape/stop rise +13.6 Hz on the real wiring vs +4.6 Hz on degree-preserving
+  shuffled wiring, permutation p = 0.0001. The whole network also speeds up more on the real wiring during loom
+  (+780 vs +571 spikes per 20 ms); normalised per 1,000 extra spikes the escape neurons still gain 17.4 Hz vs 8.1 Hz,
+  so the effect is not just more activity everywhere. On the real wiring the rise is carried by DNp04 (+12.8 Hz
+  [+8.5, +17.1]) and DNp02 (+5.6 Hz [+3.6, +7.5]) — the two direct LC4 targets — while DNp01 (giant fibre), DNp09 and MDN
+  stayed at 0 Hz in every trial. Shuffled wiring shows a small loom-vs-controls difference too (p < 0.0001 within that run),
+  i.e. looming is simply the strongest input; what the real wiring adds is where that input lands.
+- **H1 optomotor: not met**, and indistinguishable from the control graph (+0.4 vs −0.2 Hz, p = 0.38).
+- **H3 phototaxis: not met**; not different from control.
+
+Whole-network activity on the shuffled graph was about one third of the original's under identical input, for all conditions.
+
+### What phase 1 says so far
+One innate reflex — looming → escape descending neurons — survives the transfer into the robot body with the wiring
+untouched, and it depends on the specific wiring. Wide-field motion (optomotor) and phototaxis do not appear in this
+setup; the candidate causes are measured mismatches (41° of a 300° field; a transient-only hand-off; no baseline
+activity for disinhibition; a single steering DN as readout) and are the targets of the v2 protocol and of phases 2–3.
+Pre-registered v2 amendments: fade-in static disc; ≥ 2 s baseline; hand-off gain calibrated to HS-cell physiology;
+a wider pre-registered DN panel for turning; C2 scrambled-sign run.
