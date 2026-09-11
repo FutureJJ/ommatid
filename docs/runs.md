@@ -213,3 +213,17 @@ drives and feels the legs) starts next, with its own pre-registration.
   doc — mid-leg coxa promotors ≈ 142 Hz both sides, mid-leg tibia extensors 139–195 Hz, front-leg femur antagonists 19–37 Hz,
   hind legs 7–29 Hz; 16 of 18 units above 5 Hz; 10 s window SDs ≤ 3 Hz (the pattern is steady, not rhythmic: no 0.2–2 Hz peak
   exceeds 10× the band median).
+
+## Incident — body agent connection leak took the house Wi-Fi down (found 2026-09-11 ~18:45 UTC)
+- Symptom (Can): the home router (TP-Link) stopped serving the laptop. Server side: the robot was posting **78 frames/s**
+  instead of 9, opening **43 new TLS connections/s**, and the server held **2,086 established connections** from the house IP.
+- Cause: agent v0.3 (the "local stats file" change) started the three sender threads inside the 5-second stats timer instead of
+  once at start-up — an indentation slip. Three new threads and three new HTTPS connections every 5 s; after an hour, thousands,
+  each holding a NAT entry in the router. The pacing lock was shared but was reset every 5 s, so the frame rate was unbounded.
+- Fix: agent v0.4 starts the senders once, backs off 1 s after any failed round trip, and reports its thread count in the body
+  telemetry (`threads`), so a leak of this kind shows on the live page. The body unit's ExecStop used `pkill -f ommatid/agent.py`,
+  which matches its own shell (the same self-match that had silenced the camera watchdog) — bracketed.
+- No effect on the experiment record: the brain consumed the newest frame per step as designed and the body was in dry run
+  throughout. The v2 protocol runs earlier in the day were made under agent v0.2/v0.3 with the correct 9 fps at their start; the
+  leak grows with agent uptime, so frame-age statistics of long runs should be read with this in mind (frame_age_ms is logged
+  per step and can be checked).

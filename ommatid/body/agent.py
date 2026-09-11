@@ -78,6 +78,12 @@ class Body(Node):
         self.last_cam_relaunch = 0.0
         self.create_timer(5.0, self._camera_watchdog)
         self.create_timer(5.0, self._write_stats)
+        # the sender threads start exactly once. (v0.3 started them inside the 5 s stats timer by an indentation slip:
+        # 3 new threads and 3 new TLS connections every 5 s, thousands after an hour — enough to fill a home router's
+        # NAT table and take the house Wi-Fi down with it. Found 2026-09-11 evening.)
+        self.next_send = time.time()
+        for i in range(SENDERS):
+            threading.Thread(target=self._sender, name=f"brain-sender-{i}", daemon=True).start()
 
     def _write_stats(self):
         """Local status file, so the body can be debugged when no frames (and hence no telemetry) reach the brain."""
@@ -89,9 +95,6 @@ class Body(Node):
                             "dry_run": DRY_RUN, "phase2": PHASE2, **self.stats}, f)
         except Exception as e:
             self.stats["stats_error"] = str(e)[:80]
-        self.next_send = time.time()
-        for i in range(SENDERS):
-            threading.Thread(target=self._sender, name=f"brain-sender-{i}", daemon=True).start()
 
     # ---- sensors ----------------------------------------------------------------
     def _on_rgb(self, m):
@@ -170,6 +173,7 @@ class Body(Node):
                 self._send_once(conn)
             except Exception as e:
                 self.stats["errors"] += 1; self.stats["last_error"] = str(e)[:120]
+                time.sleep(1.0)                                   # backoff: never reconnect faster than 1/s per sender
 
     def _send_once(self, conn):
         t_enc = time.time()
@@ -182,7 +186,7 @@ class Body(Node):
                 "lidar_age_ms": round((time.time() - self.scan_ts) * 1000) if self.scan_ts else None, "lidar": self.scan_meta,
                 "frames": self.stats["frames"], "lease_stops": self.stats["lease_stops"], "obstacle_blocks": self.stats["obstacle_blocks"],
                 "stale_cmds": self.stats["stale_cmds"], "moving": self.moving, "errors": self.stats["errors"],
-                "servos": {str(k): v for k, v in self.servos.items()} if PHASE2 else None, "servo_age_ms": round((time.time() - self.servo_ts) * 1000) if self.servo_ts else None,
+                "servos": {str(k): v for k, v in self.servos.items()} if PHASE2 else None, "threads": threading.active_count(), "servo_age_ms": round((time.time() - self.servo_ts) * 1000) if self.servo_ts else None,
                 "imu_omega_dps": [round(x, 1) for x in self.omega], "phase2": PHASE2, "stand": STAND, "leg_limits": {"max_pulse": MAX_LEG_PULSE, "step": MAX_PULSE_STEP},
                 "would_servos": self.stats.get("would_servos"),
                 "last_error": self.stats["last_error"], "post_ms": self.stats.get("post_ms"), "send_ms": self.stats.get("send_ms"), "encode_ms": self.stats.get("encode_ms"), "reconnects": self.stats.get("reconnects", 0), "cam_relaunches": self.stats.get("cam_relaunches", 0)}
@@ -194,7 +198,7 @@ class Body(Node):
         t_post = time.time()
         try:
             conn[0].request("POST", u.path, body=jpeg,
-                              headers={"Content-Type": "image/jpeg", "Authorization": f"Bearer {TOKEN}", "User-Agent": "Ommatid-Body/0.3",
+                              headers={"Content-Type": "image/jpeg", "Authorization": f"Bearer {TOKEN}", "User-Agent": "Ommatid-Body/0.4",
                                        "X-Ommatid-Telemetry": json.dumps(tele), "Connection": "keep-alive"})
             self.stats["send_ms"] = round((time.time() - t_post) * 1000)
             resp = conn[0].getresponse(); data = resp.read()
