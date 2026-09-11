@@ -7,7 +7,7 @@ Requires=docker.service
 Type=simple
 EnvironmentFile=/home/pi/ommatid/.env
 ExecStartPre=/bin/bash -c 'for i in $(seq 1 60); do docker exec rospider true 2>/dev/null && exit 0; sleep 2; done; exit 1'
-ExecStart=/usr/bin/docker exec -u ubuntu -w /home/ubuntu -e OMMATID_BRAIN_URL=${OMMATID_BRAIN_URL} -e OMMATID_TOKEN=${OMMATID_TOKEN} -e OMMATID_DRY_RUN=${OMMATID_DRY_RUN} -e OMMATID_CAM_TILT=${OMMATID_CAM_TILT} rospider /bin/zsh -c 'source ~/.zshrc >/dev/null 2>&1; exec python3 /home/ubuntu/share/tmp/ommatid/agent.py'
+ExecStart=/usr/bin/docker exec -u ubuntu -w /home/ubuntu -e OMMATID_BRAIN_URL=${OMMATID_BRAIN_URL} -e OMMATID_TOKEN=${OMMATID_TOKEN} -e OMMATID_DRY_RUN=${OMMATID_DRY_RUN} -e OMMATID_CAM_TILT=${OMMATID_CAM_TILT} -e OMMATID_PHASE=${OMMATID_PHASE} -e OMMATID_STAND=${OMMATID_STAND} rospider /bin/zsh -c 'source ~/.zshrc >/dev/null 2>&1; exec python3 /home/ubuntu/share/tmp/ommatid/agent.py'
 ExecStop=/usr/bin/docker exec rospider bash -c 'pkill -f ommatid/agent.py || true'
 Restart=always
 RestartSec=5
