@@ -35,13 +35,13 @@ class Telemetry:
     """Parquet log, one row per control step, rotated hourly."""
     def __init__(self, directory: Path):
         self.dir = directory; self.dir.mkdir(parents=True, exist_ok=True)
-        self.rows = []; self.hour = None
+        self.rows = []; self.hour = None; self.last_flush = time.time()
 
     def add(self, row: dict):
         self.rows.append(row)
         h = time.strftime("%Y%m%d-%H", time.gmtime())
         if self.hour is None: self.hour = h
-        if h != self.hour or len(self.rows) >= 2000:
+        if h != self.hour or len(self.rows) >= 500 or time.time() - self.last_flush > 30:
             self.flush()
             self.hour = h
 
@@ -53,7 +53,7 @@ class Telemetry:
         if path.exists():
             table = pa.concat_tables([pq.read_table(path), table], promote_options="default")
         pq.write_table(table, path)
-        self.rows = []
+        self.rows = []; self.last_flush = time.time()
 
 
 class BrainService:
