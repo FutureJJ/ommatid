@@ -38,7 +38,7 @@ class Params:
     dt: float = 0.2         # ms integration step
 
 
-@nb.njit(cache=True, fastmath=True)
+@nb.njit(cache=True, fastmath=True, nogil=True)
 def _step_kernel(v, g, refr, pend, ring_pos, indptr, indices, wdata, gain, ext_idx, ext_p, rand, steps,
                  v_0, v_th, v_rst, e_m, e_s, k_vg, refr_steps, dly_steps, fired_mask, spike_count_out):
     """Advance `steps` substeps in place.
