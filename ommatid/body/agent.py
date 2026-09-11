@@ -36,7 +36,7 @@ SCAN_FRESH_S = 1.0
 OBSTACLE_STOP_M = 0.20
 FRONT_HALF_ANGLE = math.radians(22.5)
 FRONT_ANGLE_OFFSET = float(os.environ.get("OMMATID_LIDAR_FRONT_RAD", "0.0"))   # angle (rad) of straight-ahead in the scan frame
-BATTERY_FLOOR_V = 10.3
+BATTERY_FLOOR_V = float(os.environ.get("OMMATID_BATTERY_FLOOR", "9.6"))   # 3S LiPo: 3.2 V/cell; below 3.0 V/cell cells are damaged
 MAX_LINEAR = 0.08             # m/s, stock clamp is 0.12
 MAX_YAW = 0.5                 # rad/s, stock clamp is 0.6
 DRY_RUN = os.environ.get("OMMATID_DRY_RUN", "1") == "1"      # 1: talk to the brain but never move
@@ -125,11 +125,14 @@ class Body(Node):
                 "dry_run": DRY_RUN, "battery_v": self.battery_v, "yaw_deg": self.yaw, "lidar_front_m": self.scan_front,
                 "lidar_age_ms": round((time.time() - self.scan_ts) * 1000) if self.scan_ts else None, "lidar": self.scan_meta,
                 "frames": self.stats["frames"], "lease_stops": self.stats["lease_stops"], "obstacle_blocks": self.stats["obstacle_blocks"],
-                "stale_cmds": self.stats["stale_cmds"], "moving": self.moving}
+                "stale_cmds": self.stats["stale_cmds"], "moving": self.moving, "errors": self.stats["errors"],
+                "last_error": self.stats["last_error"], "post_ms": self.stats.get("post_ms"), "reconnects": self.stats.get("reconnects", 0)}
         u = urlsplit(BRAIN_URL)
         if self.conn is None:
+            self.stats["reconnects"] = self.stats.get("reconnects", 0) + 1
             self.conn = (http.client.HTTPSConnection(u.hostname, u.port or 443, timeout=1.5, context=ssl.create_default_context())
                          if u.scheme == "https" else http.client.HTTPConnection(u.hostname, u.port or 80, timeout=1.5))
+        t_post = time.time()
         try:
             self.conn.request("POST", u.path, body=jpeg,
                               headers={"Content-Type": "image/jpeg", "Authorization": f"Bearer {TOKEN}", "User-Agent": "Ommatid-Body/0.3",
@@ -138,6 +141,7 @@ class Body(Node):
             if resp.status != 200:
                 raise RuntimeError(f"brain HTTP {resp.status}")
             cmd = json.loads(data)
+            self.stats["post_ms"] = round((time.time() - t_post) * 1000)
         except Exception:
             try: self.conn.close()
             except Exception: pass
