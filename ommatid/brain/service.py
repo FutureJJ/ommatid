@@ -242,9 +242,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=int(os.environ.get("OMMATID_PORT", "8700")))
     ap.add_argument("--mode", default=os.environ.get("OMMATID_MODE", "live"), choices=["live", "blind"])
-    ap.add_argument("--graph", default=str(ROOT / "build/graph.npz"))
+    ap.add_argument("--graph", default=os.environ.get("OMMATID_GRAPH", str(ROOT / "build/graph.npz")))
     a = ap.parse_args()
-    svc = BrainService(graph=a.graph, mode=a.mode)
+    variant = Path(a.graph).stem.replace("graph_", "") if Path(a.graph).stem != "graph" else "original"
+    svc = BrainService(graph=a.graph, mode=a.mode, log_dir=ROOT / "logs" / variant)
+    svc.state["graph_variant"] = variant
     web.run_app(make_app(svc, os.environ.get("OMMATID_TOKEN", "")), host="127.0.0.1", port=a.port, print=None)
 
 
