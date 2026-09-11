@@ -159,3 +159,13 @@ frozen parameters `freeze-v2` (docs/frozen-params-v2.md). Body locked (dry run).
 camera frame at ≈ 26° wide (115 of 320 px of the 74° field) → about 63 cm from the camera for a 30 cm screen; centred; room
 dark, the screen is the main light. Derived: grating period ≈ 5.3°, drift ≈ 8°/s brain time, loom 0.8° → 15°, half-field
 boundary at the midline. Each run's graph and column hashes are written to `run_v2.log` at its start.
+
+### v2 chain, attempt 1 stopped (14:20 UTC)
+The original-graph run was stopped by the operator at trial 110/242 to move the screen closer; its logs are kept in
+`runs/data/original-v2-63cm-aborted/` as exploratory. Interim (97 valid trials): escape/stop readouts 0 Hz in every
+condition; H1 50 %; H3 71 % toward the bright side (bright_R +3.1 Hz, bright_L −0.9 Hz); network ≈ 24,100 spikes/20 ms.
+
+## v2 runs, attempt 2 — 2026-09-11 from 14:28 UTC
+Same chain and freeze. Display moved closer: the screen now spans 55 % × 60 % of the camera frame ≈ **41° × 30°**
+(≈ 40 cm for a 30 cm screen), centred after tilting the camera to servo pulse 235; room dark, screen the main light.
+Derived: grating period ≈ 8.1°, drift ≈ 12°/s brain time (≈ 1.5 Hz); loom 1.5° → 27°; half-field boundary at the midline.
