@@ -1,0 +1,18 @@
+[Unit]
+Description=Ommatid brain service (FlyVis optic lobe + male CNS LIF + readout)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ommatid
+WorkingDirectory=/home/ommatid/ommatid
+EnvironmentFile=/home/ommatid/ommatid/.env
+Environment=OMP_NUM_THREADS=4
+ExecStart=/home/ommatid/ommatid/.venv/bin/python -m ommatid.brain.service --port 8700
+Restart=always
+RestartSec=3
+Nice=-5
+
+[Install]
+WantedBy=multi-user.target

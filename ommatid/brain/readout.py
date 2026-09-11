@@ -23,6 +23,7 @@ class Gains:
     stop_hz: float = 150.0      # DNp09 rate above which the body stops
     max_linear_mps: float = 0.08
     max_yaw_rps: float = 0.5
+    smooth_ms: float = 200.0    # exponential average of rates over this much brain time before mapping to a command
 
 
 class Readout:
@@ -38,11 +39,19 @@ class Readout:
             if len(v) == 0:
                 raise RuntimeError(f"readout population {k} is empty in this graph")
         self.all_idx = np.concatenate(list(self.pop.values()))
+        self.smoothed = {k: 0.0 for k in self.pop}
 
     def rates(self, counts: np.ndarray, secs: float) -> dict:
-        return {k: float(counts[v].sum() / len(v) / secs) for k, v in self.pop.items()}
+        """Instantaneous rates of this window (Hz per neuron), and update the smoothed rates used for commands."""
+        inst = {k: float(counts[v].sum() / len(v) / secs) for k, v in self.pop.items()}
+        a = 1.0 - np.exp(-secs * 1000.0 / self.g.smooth_ms)
+        for k, v in inst.items():
+            self.smoothed[k] += a * (v - self.smoothed[k])
+        return inst
 
-    def command(self, hz: dict) -> dict:
+    def command(self, hz: dict | None = None) -> dict:
+        """Body command from the smoothed rates (pass hz to use raw instantaneous rates instead)."""
+        hz = self.smoothed if hz is None else hz
         g = self.g
         turn = np.clip((hz["DNa02_R"] - hz["DNa02_L"]) / g.turn_hz, -1, 1)
         fwd = np.clip((hz["DNa01_L"] + hz["DNa01_R"]) / 2 / g.forward_hz, 0, 1)

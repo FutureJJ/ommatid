@@ -1,6 +1,6 @@
 # Ommatid — experiment design
 
-Status: draft v1, 2026-09-11. This document is written before the closed loop exists. It fixes the hypotheses,
+Status: draft v2, 2026-09-11 (v1 → v2: optic lobe replaced by FlyVis after the pilot in docs/model.md showed a zero-baseline spiking model cannot see). This document is written before the closed loop exists. It fixes the hypotheses,
 the controls, the measurements and the honesty rules in advance, so that results cannot be shaped after the fact.
 
 ## 1. Question
@@ -9,9 +9,13 @@ A whole-CNS connectome tells us who is wired to whom and, through neurotransmitt
 It does not tell us what the animal does. Shiu et al. (2024) showed that a leaky integrate-and-fire model built
 from the female brain connectome alone, with no fitted parameters, reproduces sugar-evoked proboscis extension.
 
-Ommatid asks the next question: **if the same kind of untrained connectome model is given a body and eyes, do the
-innate visuomotor reflexes of a walking fly appear in the body's behaviour?** The model is the male CNS v1.0
-(brain + ventral nerve cord, 165,122 neurons). The body is a six-legged robot with a camera.
+Ommatid asks the next question: **if a connectome model is given a body and eyes, do the innate visuomotor
+reflexes of a walking fly appear in the body's behaviour?** The model has two connectome-constrained parts joined
+at the boundary where the fly's own physiology changes from graded to spiking: the optic lobe (FlyVis, Lappalainen
+et al. 2024: 45,669 graded neurons, 64 types, 721 columns, a few trained scalars per type) and the rest of the male
+CNS v1.0 (brain + ventral nerve cord, untrained spiking model after Shiu et al. 2024, 165,122 neurons). The body is
+a six-legged robot with a camera. The hypotheses test the untrained part: whether the wiring downstream of the
+motion and feature detectors turns their activity into the right descending commands.
 
 ## 2. Hypotheses (pre-registered)
 
@@ -27,9 +31,13 @@ distinguishable from the shuffled-connectome control at p < 0.01 (permutation te
 
 **H2 — Looming response.** An expanding dark disc drives lobula columnar cells (LC4, LC6, LPLC2) onto escape and
 freezing descending neurons (von Reyn 2014; Ache 2019; Zacarias 2018).
-Readout: DNp09 rate (stopping/freezing) and MDN rate (backward walking).
-Prediction: looming raises DNp09 and/or MDN above their pre-stimulus baseline within 200 ms of brain time; a
-same-luminance non-expanding disc does not. Criterion: response in ≥ 70 % of looming trials, < 20 % of control trials.
+Readout: the escape descending neurons DNp02 and DNp04 (direct LC4 targets), the giant fibre DNp01, DNp09
+(stopping/freezing) and MDN (backward walking).
+Prediction: looming raises these above their pre-stimulus baseline within 200 ms of brain time; a same-luminance
+non-expanding disc and drifting gratings do not. Criterion: response in ≥ 70 % of looming trials, < 20 % of control
+trials. Body response: stop, then back away (MDN) if it fires.
+Disclosure: in the development pilot of 2026-09-11 (open loop, synthetic disc, before any parameter was frozen)
+looming drove LC4 to 12 Hz and DNp04/DNp02 to 41/17 Hz while gratings and grey left them at 0 Hz.
 
 **H3 — Phototaxis.** Walking flies orient toward light. Prediction: with one half of the camera field brighter, the
 DNa02 asymmetry points toward the bright side and DNa01 (forward) rate is higher than in uniform darkness.
@@ -57,14 +65,14 @@ Every reported effect is a contrast against C1 and C4 at minimum.
 |---|---|---|
 | Neurons, synapses, synapse counts | FlyEM male CNS v1.0, EM reconstruction | measured |
 | Neuron types, soma side, eye column assignment | male CNS annotations | measured (curated) |
-| Excitatory / inhibitory sign | consensus neurotransmitter prediction per neuron | predicted from EM, not recorded |
+| Excitatory / inhibitory sign | consensus neurotransmitter prediction per neuron (GABA/Glu inhibitory, all else excitatory, as in Shiu 2024) | predicted from EM, not recorded |
+| Optic lobe (R1-R8 → T4/T5, Tm, TmY) | FlyVis: FIB-25 connectome wiring; per-type time constants, resting potentials and one synaptic scale trained on an optic-flow task | connectome-constrained, task-trained, never fit to neural data |
+| Optic lobe → central brain hand-off | FlyVis output activity, minus its grey-field baseline, rectified, × one scalar (Hz per unit) → forced spikes in the male CNS neurons of the same type and column | invented scalar, fixed before trials |
+| Columns of T4/T5, Tm3, TmY (no column label in the male CNS) | synapse-weighted mean of column-carrying presynaptic partners | anatomical inference |
 | Soma coordinates (for display) | male CNS annotations | measured |
-| LIF parameters (rest −52 mV, threshold −45 mV, τ 20 ms, refractory 2.2 ms) | Shiu et al. 2024 | assumed, literature |
-| 0.275 mV per synapse | Shiu et al. 2024 | assumed, literature |
-| Pairs with < 3 synapses dropped | reconstruction-noise threshold | assumed |
-| Monoamines (DA, OA, 5-HT) carry zero fast weight | modulatory in reality | simplification |
-| Photoreceptor → L1/L2 drive from camera luminance change | ON/OFF split (Joesch 2010; Clark 2011) | modelled, simplified |
-| Poisson external drive, rate ∝ contrast | standard | modelled |
+| LIF dynamics (rest −52 mV, threshold −45 mV, τ_m 20 ms, τ_syn 5 ms, delay 1.8 ms, refractory 2.2 ms, 0.275 mV per synapse into the synaptic variable) | Shiu et al. 2024, reproduced from their released code | assumed, literature |
+| Pairs with < 5 synapses dropped | FlyWire Codex threshold used by the paper's source table | assumed |
+| Monoamines treated as excitatory, baseline firing 0 Hz | Shiu et al. 2024 | paper's convention |
 | Descending-neuron rate → body velocity gain | one scalar per channel | invented, fixed before trials |
 | Robot gait itself | Hiwonder kinematics, not the VNC | engineering, replaced in phase 2 |
 
@@ -72,14 +80,17 @@ No gains, weights or thresholds are tuned against behavioural outcomes. There is
 
 ## 5. Apparatus
 
-**Brain.** Hetzner CPX32 (4 vCPU, 8 GB), numba LIF kernel over the CSC connectivity matrix. One control step =
-20 ms of brain time (100 substeps of 0.2 ms). Measured cost 65 ms wall per step on one core, so the fly experiences
-the world at roughly one-third speed; the dilation factor is logged every step and reported with every result.
+**Brain.** Hetzner CPX32 (4 vCPU, 8 GB). One control step = 20 ms of brain time: two 10 ms FlyVis frames, then 100
+LIF substeps of 0.2 ms (numba kernel over the CSC connectivity matrix, verified spike-for-spike against a numpy
+reference). Measured cost about 70 ms wall per step on the development machine, so the fly experiences the world at
+roughly one-third speed; the dilation factor is logged every step and reported with every result.
 
-**Eye.** Camera frame → grey → sampled at the fly's own eye columns (hex coordinates from the annotations,
-each column's L1 and L2 cell). L1 receives brightening, L2 receives dimming, each relative to a per-column
-adapting mean; both have a tonic baseline. The camera's ~70° field is mapped onto the frontal part of both eyes;
-the fly's real ~300° field is not available and this is stated.
+**Eye and optic lobe.** Camera frame → grey → placed on FlyVis's 721-column retina for each eye (the left eye is
+the same network fed a mirrored frame) → FlyVis integrates at 10 ms steps → the activity of its output types
+(T4a-d, T5a-d, Tm, TmY, T1-T3) is injected as forced spikes into the male CNS neurons of the same type and column.
+The camera's 74° × 50° field covers the frontal part of each eye; the rest of the fly's ~300° field sees a
+uniform grey and this is stated. A pilot (docs/model.md) showed the spiking model alone is blind: its ON pathway
+needs disinhibition from a baseline it does not have.
 
 **Body.** Hiwonder RoSpider hexapod, Raspberry Pi 5, ROS 2 Humble. The Pi runs a body agent: grabs frames,
 publishes `/controller/cmd_vel`, enforces reflexes the brain cannot override (LiDAR obstacle stop, servo/battery
@@ -113,8 +124,10 @@ daily public dumps. Code MIT, connectome CC-BY with attribution, results and raw
 - The VNC is simulated but its motor neurons do not yet drive the legs; the robot gait is engineered. Phase 2
   reads leg motor neurons directly and this document will be revised before that.
 - No neuromodulation, no plasticity, no internal state (hunger, sleep).
-- The eye model is a caricature of phototransduction; the temporal-contrast split is the minimum needed for
-  motion detection to be possible at all.
+- FlyVis models a female (FIB-25) optic lobe; the central model is male. Types are matched by name, columns by
+  visual angle. FlyVis was trained for optic flow, so feature pathways it was not trained on may be under-expressed.
+- The Shiu-class spiking model has no baseline firing, so disinhibition cannot act on silent neurons anywhere in the
+  central brain either; this is a property of the model class, reported, not corrected.
 - The brain runs slower than real time; dynamic behaviours are compared in brain time, not wall time.
 - Two DNa02 and two DNa01 neurons exist in the dataset (one per side). Readouts on two cells are noisy; rates are
   averaged over 20 ms windows and many trials, and reported with confidence intervals.
@@ -122,7 +135,8 @@ daily public dumps. Code MIT, connectome CC-BY with attribution, results and raw
 ## 9. Milestones
 
 - M0 data + graph + kernel + server — done 2026-09-11
-- M1 brain service: eye, readout, persistent state, telemetry, replay mode, tests
+- M1 brain service: FlyVis eye + LIF central model + readout, persistent state, telemetry, replay mode, tests
+  (2026-09-11: model corrected and validated, hybrid pilot passes looming; service and telemetry pending)
 - M2 body agent on the Pi: frames up, commands down, reflexes, tunnel, bench test
 - M3 closed loop + stimulus rig + protocol run + analysis
 - M4 public site and continuous stream
@@ -140,4 +154,5 @@ Ache JM et al. (2019) Neural basis for looming size and velocity encoding in the
 Zacarias R et al. (2018) Speed dependent descending control of freezing behavior in Drosophila. Nature Communications.
 Joesch M et al. (2010) ON and OFF pathways in Drosophila motion vision. Nature.
 Clark DA et al. (2011) Defining the computational structure of the motion detector in Drosophila. Neuron.
+Lappalainen JK et al. (2024) Connectome-constrained networks predict neural activity across the fly visual system. Nature.
 FlyEM male CNS v1.0 (2026) HHMI Janelia, Cambridge Connectomics Group, Google Research. CC-BY.

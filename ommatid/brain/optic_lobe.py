@@ -59,6 +59,7 @@ class OpticLobe:
         # so what is injected is the deviation from this grey steady state, rectified: no image, no drive.
         self.baseline = st.nodes.activity.detach().cpu().numpy().copy()          # (2, n_nodes)
         self.last = None
+        self.last_movie = None
 
     # ---- rendering ----------------------------------------------------------
     def _place(self, gray: np.ndarray, mirror: bool) -> np.ndarray:
@@ -97,6 +98,7 @@ class OpticLobe:
             self.state = states[-1]
             act = torch.stack([s.nodes.activity for s in states], 0).mean(0)          # (2, n_nodes)
         self.last = act.numpy()
+        self.last_movie = movie[:, -1, 0].numpy()                                       # (2, 721) hexal luminances
         return self.last
 
     def rates(self, act: np.ndarray) -> dict:
