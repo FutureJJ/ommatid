@@ -14,6 +14,8 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from geometry_msgs.msg import Twist
+from kinematics_msgs.msg import Traveling
+from interfaces.msg import RunActionSet
 from sensor_msgs.msg import Image, Imu, LaserScan
 from std_msgs.msg import UInt16
 
@@ -44,6 +46,10 @@ class Body(Node):
         self.create_subscription(Imu, "/imu", self._on_imu, qos_profile_sensor_data)
         self.create_subscription(UInt16, "/ros_robot_controller/battery", self._on_batt, 5)
         self.pub_vel = self.create_publisher(Twist, "/controller/cmd_vel", 5)
+        self.pub_travel = self.create_publisher(Traveling, "/controller/traveling", 5)
+        self.pub_action = self.create_publisher(RunActionSet, "/controller/run_actionset", 5)
+        self.moving = False
+        self._halt()   # make sure the gait engine is idle at start
         self.create_timer(PERIOD_S, self._tick)
         self.create_timer(0.1, self._drive)
 
@@ -86,10 +92,18 @@ class Body(Node):
         except Exception as e:
             self.stats["errors"] += 1; self.stats["last_error"] = str(e)[:120]
 
+    def _halt(self):
+        """Stop the gait engine for real: a zero Twist is NOT a stop for the stock controller (it steps in place)."""
+        m = Traveling(); m.gait = 0; m.interrupt = True
+        self.pub_travel.publish(m)
+        a = RunActionSet(); a.action_path = "stop"
+        self.pub_action.publish(a)
+        self.moving = False
+
     def _drive(self):
         with self.lock:
             cmd, ts = self.cmd, self.cmd_ts
-        t = Twist()
+        lin = yaw = 0.0
         if cmd is None or time.time() - ts > WATCHDOG_S:
             if cmd is not None: self.stats["watchdog_stops"] += 1
         elif not cmd.get("stop") and (self.battery_v is None or self.battery_v >= BATTERY_FLOOR_V):
@@ -98,9 +112,12 @@ class Body(Node):
             if lin > 0 and self.scan_front is not None and self.scan_front < OBSTACLE_STOP_M:
                 lin = 0.0; self.stats["obstacle_blocks"] += 1
             self.stats["would"] = {"linear": round(lin, 3), "yaw": round(yaw, 3)}
-            if not DRY_RUN:
-                t.linear.x = lin; t.angular.z = yaw
-        self.pub_vel.publish(t)
+        want_motion = (not DRY_RUN) and (abs(lin) > 0.005 or abs(yaw) > 0.02)
+        if want_motion:
+            t = Twist(); t.linear.x = lin; t.angular.z = yaw
+            self.pub_vel.publish(t); self.moving = True
+        elif self.moving:
+            self._halt()
 
 
 def main():
@@ -109,7 +126,7 @@ def main():
     try:
         rclpy.spin(node)
     finally:
-        node.pub_vel.publish(Twist()); node.destroy_node(); rclpy.shutdown()
+        node._halt(); node.destroy_node(); rclpy.shutdown()
 
 
 if __name__ == "__main__":
