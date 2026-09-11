@@ -101,3 +101,20 @@ front-leg femur antagonists 22–41 Hz, hind legs 5–30 Hz. The resulting servo
 ~32° and raise the right-front by ~18° (clamped by the ±45° range) — the standing pose is not a fixed point of the fly's
 reflexes in this body. Nothing moved (dry run). This is why the first real trials need a stand: whether the fly settles into
 a posture or oscillates is the first thing P2-a will record, with the legs in the air.
+
+## 10. Pre-registration of P2-a in the dry run (2026-09-11, before the first block; parameters in docs/frozen-params-p2.md)
+
+There is no stand yet and the body stays in dry run, so §4's first question is asked in the only form the body allows:
+
+**P2-a (dry run).** With the camera feeding the eye (free viewing) and the body standing still, do the leg motor-neuron pools
+fire, and does the static proprioceptive report of the standing pose change what they do? Two graphs (original, C1 shuffled
+seed 2026), for each: feedback ON / OFF / ON / OFF, 150 s of brain time per arm, first 20 s after every switch excluded.
+Criterion: at least one of the 18 motor units has a pool with a mean rate > 5 Hz in the original graph's feedback-on blocks.
+Reported without a criterion: every unit's rates, the servo angles that would result (the body would clamp them to ± 15°),
+agonist − antagonist spectra in 0.2–2 Hz, feedback on vs off (Holm over 18 units), original vs shuffled.
+
+What this can and cannot say. It can say whether the untouched nerve cord produces any leg motor output in this body and
+whether that output is specific to the real wiring. It cannot say anything about reflex loops (P2-b) or rhythm on the ground
+(P2-c): in the dry run the legs never move, so the proprioceptors report one fixed posture. The §8–9 smoke observations
+(mid-leg coxa promotors 130–160 Hz, tibia extensors 120–200 Hz) are the reason to expect P2-a to be met; they were exploratory
+and are not evidence.

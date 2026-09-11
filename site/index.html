@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ommatid</title>
 <meta name="description" content="A real fruit-fly nervous system, simulated neuron by neuron, given a six-legged metal body. Live.">
-<link rel="stylesheet" href="/style.css?v=7">
+<link rel="stylesheet" href="/style.css?v=8">
 </head>
 <body>
 <div class="page">
@@ -75,6 +75,21 @@
       <header><span class="t"><b>Plate VI</b> — state</span></header>
       <div class="body"><div class="kv" id="kv"></div></div>
     </figure>
+
+    <figure class="plate">
+      <header><span class="t"><b>Plate VII</b> — the legs</span> <span id="legs-sub">phase 2 · nerve cord → 18 servos</span></header>
+      <div class="body legs">
+        <svg id="hexa" viewBox="0 0 120 150" aria-hidden="true">
+          <text x="60" y="9" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="7" fill="#948e82" letter-spacing=".1em">FRONT</text>
+          <ellipse cx="60" cy="78" rx="14" ry="42" fill="none" stroke="#16140f" stroke-width="1.2"/>
+          <circle cx="60" cy="30" r="6" fill="none" stroke="#16140f" stroke-width="1.2"/>
+          <g id="hexa-legs" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4"></g>
+          <g id="hexa-labels" font-family="JetBrains Mono, monospace" font-size="6.5" fill="#948e82"></g>
+        </svg>
+        <div class="joints" id="joints"></div>
+      </div>
+      <figcaption>Each bar is one servo: the centre line is the standing pose, the black fill is where the fly's leg motor neurons are telling that joint to go (agonist minus antagonist pool rate, ± 45° full scale), the <span style="color:var(--red)">red tick</span> is where the joint actually is. Small numbers: agonist / antagonist spikes per second. While the body is in dry run the targets are computed, logged and shown, not applied.</figcaption>
+    </figure>
   </div>
 </div>
 
@@ -94,7 +109,9 @@
     <tr><td>Optic lobe → central brain hand-off</td><td>activity minus its grey-field baseline, rectified, one scalar to spikes per second</td><td class="s">invented, fixed before trials</td></tr>
     <tr><td>Neuron dynamics</td><td>Shiu et al. 2024: −52 mV rest, −45 mV threshold, 20 ms membrane, 5 ms synapse, 1.8 ms delay, 0.275 mV per synapse</td><td class="s">literature</td></tr>
     <tr><td>Descending-neuron rate → speed and turn</td><td>one gain per channel</td><td class="s">invented, fixed before trials</td></tr>
-    <tr><td>The gait itself</td><td>the robot's own leg controller, not the nerve cord</td><td class="s">engineering, phase 2 replaces it</td></tr>
+    <tr><td>Leg motor neurons → 18 servos (phase 2)</td><td>agonist and antagonist motor-neuron pools per joint, named by muscle in the annotations; one gain per joint kind</td><td class="s">anatomy + one invented gain, fixed before trials</td></tr>
+    <tr><td>Servo state → leg proprioceptors (phase 2)</td><td>chordotonal, hair-plate, campaniform and haltere neurons; side inferred from wiring</td><td class="s">invented encoding, fixed before trials</td></tr>
+    <tr><td>The gait itself</td><td>phase 1: the robot's own leg controller. Phase 2: the nerve cord's targets, applied only in pre-registered trials</td><td class="s">engineering → nerve cord</td></tr>
   </table></div>
   <p>The brain runs slower than the animal's: one 20 ms step of the fly's time takes about 100 ms of ours; the dilation is in the title block. The full design is in <a href="https://github.com/FutureJJ/ommatid/blob/main/docs/experiment.md">docs/experiment.md</a>, what broke on the way in <a href="https://github.com/FutureJJ/ommatid/blob/main/docs/model.md">docs/model.md</a>.</p>
 </section>
@@ -208,6 +225,62 @@ function drawEye(cv, vals, mirror){
     const g = Math.round(24 + 205*Math.max(0,Math.min(1,vals[i]))); c.fillStyle = `rgb(${g},${g-2},${g-6})`; c.beginPath(); c.arc(S/2 + x*k, S/2 + y*k, r, 0, 6.283); c.fill(); }
 }
 
+
+// ---------- Plate VII: the legs ----------
+const LEGS = [['front','L','LF'],['front','R','RF'],['mid','L','LM'],['mid','R','RM'],['hind','L','LH'],['hind','R','RH']];
+const JOINTS = ['coxa','femur','tibia'];
+const jroot = $('joints');
+jroot.insertAdjacentHTML('beforeend', `<div></div>` + JOINTS.map(j=>`<div class="h">${j}</div>`).join(''));
+for (const [leg, side, lab] of LEGS){
+  jroot.insertAdjacentHTML('beforeend', `<div class="lg">${lab}</div>` + JOINTS.map(j=>`<div class="j" id="j_${leg}_${side}_${j}"><div class="bar"><u></u><i></i><em></em></div><small>—</small><b>—</b></div>`).join(''));
+}
+// glyph: leg roots on the thorax, top view; each leg = coxa segment + femur/tibia segment, drawn from the standing pose
+const ROOT = {front:[60,44,-58], mid:[60,78,-90], hind:[60,112,-124]};   // x, y, angle of the left leg (deg, screen: 0 = +x, 90 = down)
+const hl = $('hexa-legs'), hlab = $('hexa-labels');
+const legEls = {};
+for (const [leg, side, lab] of LEGS){
+  const el = document.createElementNS('http://www.w3.org/2000/svg','polyline'); el.setAttribute('stroke','#16140f'); hl.appendChild(el); legEls[leg+side] = el;
+  const t = document.createElementNS('http://www.w3.org/2000/svg','text'); t.textContent = lab; hlab.appendChild(t); legEls[leg+side+'t'] = t;
+}
+function legPath(leg, side, coxaDeg, femurDeg){
+  const [x0, y0, a0] = ROOT[leg]; const sgn = side==='L' ? -1 : 1;
+  const a = (side==='L' ? a0 : 180 - a0) + sgn*(-coxaDeg);             // coxa yaw swings the leg fore/aft
+  const r1 = 14, r2 = 24 * Math.max(0.35, Math.cos(femurDeg*Math.PI/180)); // femur pitch foreshortens the outer segment in top view
+  const rad = a*Math.PI/180, x1 = x0 + Math.cos(rad)*r1, y1 = y0 + Math.sin(rad)*r1;
+  const rad2 = (a + sgn*20)*Math.PI/180, x2 = x1 + Math.cos(rad2)*r2, y2 = y1 + Math.sin(rad2)*r2;
+  return [[x0,y0],[x1,y1],[x2,y2]];
+}
+let servoTab = null;
+function drawLegs(s){
+  const p2 = s.phase2, pools = s.pools; const cmd = (s.command||{}).servos, reached = (s.body||{}).servos;
+  const plate = jroot.closest('.plate');
+  if (!p2 || !pools){ plate.hidden = true; return; } plate.hidden = false;
+  if (!servoTab) servoTab = {ids: p2.servo_ids, rest: p2.rest_pulse, ppd: p2.pulse_per_deg || 1000/240};
+  const dry = s.body && s.body.dry_run;
+  $('legs-sub').textContent = `phase 2 · 266 leg motor neurons → 18 servos · ${dry ? 'targets computed, body held still' : 'targets applied, clamped ± 15°'}`;
+  for (const [leg, side] of LEGS){
+    const ids = servoTab.ids[`${leg}-${side}`] || []; const sgn = side==='L' ? 1 : -1; let degs = [];
+    JOINTS.forEach((j, k) => {
+      const sid = ids[k], rest = servoTab.rest[sid], el = $(`j_${leg}_${side}_${j}`); if (sid==null || rest==null || !el) return;
+      const toDeg = p => sgn*(p - rest)/servoTab.ppd;
+      const c = cmd && cmd[sid]!=null ? toDeg(cmd[sid]) : 0, r = reached && reached[sid]!=null ? toDeg(reached[sid]) : 0; degs.push(c);
+      const pc = Math.max(-45, Math.min(45, c)), pr = Math.max(-45, Math.min(45, r));
+      const fill = el.querySelector('i'); const w = Math.abs(pc)/90*100;
+      fill.style.left = (pc<0 ? 50 - w : 50) + '%'; fill.style.width = w + '%';
+      el.querySelector('em').style.left = `calc(${50 + pr/90*100}% - 1px)`;
+      const pr_ = pools[`${leg}-${side}-${j}`] || [0,0];
+      el.querySelector('small').textContent = `${pr_[0].toFixed(0)} / ${pr_[1].toFixed(0)}`;
+      el.querySelector('b').textContent = (c>=0?'+':'−') + Math.abs(c).toFixed(0) + '°';
+      el.classList.toggle('hot', Math.abs(c) > 15);
+    });
+    const pts = legPath(leg, side, degs[0]||0, degs[1]||0);
+    const el = legEls[leg+side]; el.setAttribute('points', pts.map(p=>p.join(',')).join(' '));
+    const act = JOINTS.reduce((a,j)=>{ const q = pools[`${leg}-${side}-${j}`]||[0,0]; return a + q[0] + q[1]; }, 0);
+    el.setAttribute('stroke', act > 30 ? RED : INK); el.setAttribute('stroke-opacity', String(Math.min(1, 0.35 + act/300)));
+    const t = legEls[leg+side+'t']; const [x,y] = pts[2]; t.setAttribute('x', x + (side==='L' ? -9 : 3)); t.setAttribute('y', y + 3);
+  }
+}
+
 // ---------- telemetry ----------
 let camLive = false;
 const cam = $('cam');
@@ -232,6 +305,7 @@ function apply(s){
   $('cmdtext').textContent = c.stop ? 'stop' : `forward ${fmt(lin*1000,0)} mm/s · turn ${fmt(yaw,2)} rad/s`;
   const dry = s.body && s.body.dry_run;
   $('cmdsub').textContent = (c.reason==='live' ? 'from the descending neurons' : c.reason||'') + (dry ? ' · body held still (dry run)' : '');
+  drawLegs(s);
   const b = s.body || {}, act = s.active || {}, tot = s.totals || {}, st = s.stim || {};
   $('kv').innerHTML = [
     ['spikes / 20 ms', s.spikes], ['neurons fired', s.fired], ['graph', s.graph_variant || 'original'],

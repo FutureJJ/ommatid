@@ -99,7 +99,13 @@ class BrainService:
             self.motor = LegMotor(self.brain, ann, MotorGains())
             zs = np.load(ROOT / "build/sensory_sides.npz", allow_pickle=False)
             self.proprio = Proprioception(self.brain, ann, {int(i): str(x) for i, x in zip(zs["idx"], zs["side"])})
-            self.state["phase2"] = {"motor_neurons": int(len(self.motor.all_idx)), "proprioceptors": self.proprio.describe()}
+            from .motor import SERVO_IDS, REST_PULSE
+            self.state["phase2"] = {"motor_neurons": int(len(self.motor.all_idx)), "proprioceptors": self.proprio.describe(),
+                                    "servo_ids": {f"{l}-{s}": list(v) for (l, s), v in SERVO_IDS.items()}, "rest_pulse": {str(k): v for k, v in REST_PULSE.items()},
+                                    "pulse_per_deg": self.motor.g.pulse_per_deg, "range_deg": dict(self.motor.g.range_deg),
+                                    "gains_deg_per_hz": dict(self.motor.g.deg_per_hz), "smooth_ms": self.motor.g.smooth_ms}
+        # P2-a arm switch: proprioceptive feedback on/off (env default, runtime POST /phase2/proprio); always recorded per step
+        self.proprio_on = os.environ.get("OMMATID_PROPRIO", "1") != "0"
         self.last_servo_cmd = {}
         # "See it through the fly's eye": a guest copy of the brain (shared graph, own state) and its own optic lobe,
         # so visitors' pictures never touch the live fly. One request at a time.
@@ -152,7 +158,8 @@ class BrainService:
                 act = None
             else:
                 act = self.ol.see(frame); drive = self.cmap.drive(self.ol.rates(act)); seen = "live"
-            if self.proprio is not None and body.get("servos"):
+            proprio_on = self.proprio_on
+            if self.proprio is not None and proprio_on and body.get("servos"):
                 reached = {int(k): int(v) for k, v in body["servos"].items()}
                 joints = LegMotor.joints_from_positions(reached, self.last_servo_cmd, self.motor.g)
                 omega = body.get("imu_omega_dps") or (0.0, 0.0, 0.0)
@@ -185,6 +192,7 @@ class BrainService:
                                   drive_cells=int(sum(len(k) for k in drive)) if drive else 0,
                                   stim={k: stim.get(k) for k in ("kind", "trial", "condition", "phase")},
                                   pools=({f"{l}-{sd}-{j}": [round(a, 1), round(b, 1)] for (l, sd, j), (a, b) in pool_hz.items()} if self.motor is not None else None),
+                                  proprio_on=(proprio_on if self.proprio is not None else None),
                                   active={k: int(r["counts"][m].astype(bool).sum()) for k, m in self.groups.items()},
                                   totals={k: int(m.sum()) for k, m in self.groups.items()})
                 f = r["fired"]
@@ -199,6 +207,8 @@ class BrainService:
                           "stim_t_ms": stim.get("t_brain_ms"), "protocol_seed": self.protocol.seed if self.protocol.active else None,
                           **({f"pool_{l}_{sd}_{j}_{w}": v for (l, sd, j), (a, b) in pool_hz.items() for w, v in (("ago", a), ("ant", b))} if self.motor is not None else {}),
                           **({f"servo_{k}": v for k, v in self.last_servo_cmd.items()} if self.motor is not None else {}),
+                          **({f"reached_{k}": int(v) for k, v in (body.get("servos") or {}).items()} if self.motor is not None else {}),
+                          **({"proprio_on": proprio_on, "phase": 2} if self.motor is not None else {}),
                           **{f"body_{k}": v for k, v in body.items() if isinstance(v, (int, float, str, bool))}})
 
     def look_for_visitor(self, jpeg: bytes) -> dict:
@@ -335,6 +345,16 @@ def make_app(svc: BrainService, token: str) -> web.Application:
 
     async def protocol_status(req): return web.json_response(svc.protocol.status())
 
+    async def phase2_proprio(req):
+        """POST /phase2/proprio {"on": bool} — P2-a arm switch (token). Recorded in every step's log row."""
+        if token and req.headers.get("Authorization") != f"Bearer {token}": raise web.HTTPUnauthorized()
+        if svc.proprio is None: raise web.HTTPBadRequest(text="phase 2 is not enabled on this brain")
+        q = await req.json() if req.can_read_body else {}
+        with svc.lock:
+            svc.proprio_on = bool(q.get("on", True)); svc.proprio.prev = {}
+        svc.log.flush()
+        return web.json_response({"proprio_on": svc.proprio_on, "brain_ms": svc.brain.t_ms})
+
     async def telemetry(req):
         ws = web.WebSocketResponse(heartbeat=20); await ws.prepare(req); clients.add(ws)
         try:
@@ -358,7 +378,7 @@ def make_app(svc: BrainService, token: str) -> web.Application:
     app.add_routes([web.post("/body/frame", frame), web.get("/state.json", state), web.get("/health", health),
                     web.get("/soma.bin", soma), web.get("/groups.bin", groups), web.get("/frame.jpg", frame_jpg), web.get("/eye.mjpg", eye_mjpg), web.post("/eye/look", visitor_look),
                     web.get("/stimulus/state.json", stim_state), web.post("/protocol/start", protocol_start), web.post("/stimulus/ack", stim_ack),
-                    web.post("/protocol/stop", protocol_stop), web.get("/protocol/status.json", protocol_status),
+                    web.post("/protocol/stop", protocol_stop), web.get("/protocol/status.json", protocol_status), web.post("/phase2/proprio", phase2_proprio),
                     web.get("/telemetry", telemetry)])
     app.on_startup.append(start_bg); app.on_cleanup.append(stop_bg)
     return app
