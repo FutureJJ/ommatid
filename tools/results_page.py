@@ -73,7 +73,7 @@ def chart_trials(t_o, t_s, col="d_escape", ylabel="escape/stop rise, Hz", conds=
     out = svg_open(W, H)
     for v in np.arange(np.ceil(ymin / 10) * 10, ymax + 1, 10):
         out.append(f'<line x1="{L}" x2="{W-R}" y1="{sy(v):.1f}" y2="{sy(v):.1f}" stroke="{LINE if v else INK3}" stroke-width="1"/>')
-        out.append(text(L - 8, sy(v) + 4, f"{v:+.0f}", INK3, "end"))
+        out.append(text(L - 8, sy(v) + 4, ("0" if abs(v) < 1e-9 else f"{v:+.0f}"), INK3, "end"))
     out.append(text(L - 44, T + 10, "Hz", INK3))
     rng = np.random.default_rng(0)
     for i, cond in enumerate(conds):
