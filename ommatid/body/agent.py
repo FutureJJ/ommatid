@@ -76,7 +76,7 @@ class Body(Node):
                 "obstacle_blocks": self.stats["obstacle_blocks"]}
         req = urllib.request.Request(BRAIN_URL, data=jpeg, method="POST",
                                      headers={"Content-Type": "image/jpeg", "Authorization": f"Bearer {TOKEN}",
-                                              "X-Ommatid-Telemetry": json.dumps(tele)})
+                                              "User-Agent": "Ommatid-Body/0.1", "X-Ommatid-Telemetry": json.dumps(tele)})
         try:
             with urllib.request.urlopen(req, timeout=1.5) as resp:
                 cmd = json.loads(resp.read())

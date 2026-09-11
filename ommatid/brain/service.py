@@ -146,7 +146,10 @@ def make_app(svc: BrainService, token: str) -> web.Application:
             raise web.HTTPUnauthorized()
         body = json.loads(req.headers.get("X-Ommatid-Telemetry", "{}"))
         jpeg = await req.read()
-        cmd = svc.put_frame(jpeg, body)
+        try:
+            cmd = svc.put_frame(jpeg, body)
+        except Exception as e:
+            raise web.HTTPBadRequest(text=f"not a decodable image: {e}")
         return web.json_response(cmd)
 
     async def state(req): return web.json_response(svc.snapshot())
