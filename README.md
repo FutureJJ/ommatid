@@ -22,6 +22,13 @@ live in a new body at all: which plasticity, grounded in the fly's own circuits,
 carefully measured reference for a question that will be asked of other nervous systems one day: what happens to a
 mind when its body changes.
 
+## Status (11 September 2026)
+
+Phase 1, protocol v1, is complete and none of the pre-registered hypotheses is established. Looming raised the escape
+descending neurons DNp04/DNp02 and did so less on shuffled wiring; this is exploratory because the control also changed
+the input mapping and the criteria were not implemented as written. An independent review's findings and the fixes are
+in `docs/runs.md`; v2 follows.
+
 ## Layout
 - `ommatid/brain/` — connectome graph, LIF kernel (numba), eye, descending-neuron readout
 - `ommatid/body/` — Raspberry Pi side: camera, gait commands, reflexes

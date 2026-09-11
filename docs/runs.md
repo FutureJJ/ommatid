@@ -53,7 +53,7 @@ Interpretation is deferred to the control-graph runs (C1 shuffled wiring, C2 scr
 | grey | 30 | +4.4 | +4.5 | 10,122 / 9,632 |
 
 Original vs shuffled, pre-registered contrast (criterion p < 0.01):
-- **H2 looming: met.** Loom-evoked escape/stop rise +13.6 Hz on the real wiring vs +4.6 Hz on degree-preserving
+- **H2 looming — wiring contrast (exploratory; see review below, finding 1).** Loom-evoked escape/stop rise +13.6 Hz on the real wiring vs +4.6 Hz on degree-preserving
   shuffled wiring, permutation p = 0.0001. The whole network also speeds up more on the real wiring during loom
   (+780 vs +571 spikes per 20 ms); normalised per 1,000 extra spikes the escape neurons still gain 17.4 Hz vs 8.1 Hz,
   so the effect is not just more activity everywhere. On the real wiring the rise is carried by DNp04 (+12.8 Hz
@@ -80,3 +80,29 @@ a wider pre-registered DN panel for turning; C2 scrambled-sign run.
   confound for any cross-run comparison beyond the pre-registered contrasts and is recorded here.
 - first observation: with scrambled signs the network is hyperactive — ≈ 158,000 spikes per 20 ms at rest versus ≈ 28,500 on the
   real wiring — i.e. the connectome's excitation/inhibition assignment is what keeps the real network in a stable regime
+
+## Independent review, 2026-09-11 (commit c9b35f3) — accepted findings and corrections
+An external review (GPT-6 Astra, run by Can) found six issues. Status of each:
+
+1. **C1 changed the input mapping, not only the wiring (accepted, P1).** Column positions of unlabeled types (T4/T5, Tm3, TmY…)
+   are inferred from presynaptic partners of the *loaded* graph, so the shuffled graph received a different FlyVis→neuron map.
+   The original-vs-shuffled loom contrast (+13.6 vs +4.6 Hz, p = 0.0001) is therefore confounded and is downgraded to exploratory.
+   Fix: derive the column map once from the original anatomy, serialise it with a hash, load it unchanged for every variant.
+2. **H2 criteria were not implemented as pre-registered (accepted, P1).** The analysis used a 2 s mean, the max over five
+   readouts and a 5 Hz threshold (none frozen), pooled controls, and never tested the 200 ms onset. Per condition, > 5 Hz rises:
+   loom 67 %, static disc 67 %, grey 33 %, gratings 0 %. H2 is **not established** in v1; the earlier "met" label was wrong and
+   has been removed from the results page. The wiring contrast was never an H2 criterion.
+3. **Stimulus labels are not frame-locked; no-frame steps entered trials (accepted, P1).** 435 no-frame steps in 17 trials
+   (55 during loom stimuli). Fix: display acknowledges what it showed and when; frames carry capture time; steps are matched to
+   exposures; pre-registered trial-invalidation rules (any no-frame step → trial invalid) before v2 runs.
+4. **Body agent safety (accepted, P1).** Synchronous HTTP in the ROS callback path can block the 0.5 s watchdog; command
+   freshness must be tied to an advancing brain step, not receipt time; LiDAR front sector must use scan angles. All three are
+   fixed before motion is enabled.
+5. **Degree preservation claim (accepted, P2).** Endpoint permutation preserves the multigraph degrees; merging duplicates changed
+   0.19 % of edges. The check printed by the tool was vacuous. Fix: state the null model precisely and verify saved degrees.
+6. **Additive forcing and surround fill (accepted, P2).** Injected neurons keep their recurrent input (documented as a decision);
+   the off-camera surround was filled with the frame mean, so a dark disc also darkened the whole surround — a synthetic
+   full-field dimming. Fix: fixed grey surround; matched-luminance controls in v2.
+
+Also accepted: raw logs of every run are to be published (runs/data/), and the C2 run started at 12:39 UTC carries the same
+mapping confound (finding 1) and is exploratory.
