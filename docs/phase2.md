@@ -93,3 +93,11 @@ left-front tibia held 19° flexed, the leg motor pools fire for the first time: 
 tibia extensors 191 Hz, mid-right coxa 127 Hz, hind-leg pools 20–30 Hz, left-front femur antagonists 32 Hz. A single
 perturbed joint produces motor output mostly on OTHER legs (intersegmental), which is exactly what P2-b is designed to
 quantify. The 18 servo targets that result would move several joints by 20–30°, so the first real trials are on a stand.
+
+## 9. First live proprioception (2026-09-11 15:33 UTC, robot standing, body in dry run — exploratory)
+The real servo positions of the standing robot now feed the leg proprioceptors (18 servos, 563 sensory neurons) and the
+nerve cord answers with a tonic motor pattern: mid-leg coxa promotors 141–149 Hz, mid-leg tibia extensors 120–198 Hz,
+front-leg femur antagonists 22–41 Hz, hind legs 5–30 Hz. The resulting servo targets would lower the left-front femur by
+~32° and raise the right-front by ~18° (clamped by the ±45° range) — the standing pose is not a fixed point of the fly's
+reflexes in this body. Nothing moved (dry run). This is why the first real trials need a stand: whether the fly settles into
+a posture or oscillates is the first thing P2-a will record, with the legs in the air.
