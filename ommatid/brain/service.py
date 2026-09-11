@@ -62,7 +62,9 @@ class Telemetry:
 class BrainService:
     def __init__(self, graph=ROOT / "build/graph.npz", mode="live", log_dir=ROOT / "logs", gains: Gains = Gains()):
         t = time.time()
-        self.brain = Brain(graph); self.eye = Eye(self.brain); self.ol = OpticLobe(); self.ro = Readout(self.brain, gains)
+        from .optic_lobe import OpticLobeParams
+        hz = float(os.environ.get("OMMATID_HZ_PER_UNIT", OpticLobeParams.hz_per_unit))
+        self.brain = Brain(graph); self.eye = Eye(self.brain); self.ol = OpticLobe(OpticLobeParams(hz_per_unit=hz)); self.ro = Readout(self.brain, gains)
         # the input mapping is fixed anatomy, built once from the original graph and shared by every variant (review finding 1)
         cols = Path(graph).parent / "columns.npz"
         if not cols.exists():
@@ -83,7 +85,7 @@ class BrainService:
         self.command = {"linear_mps": 0.0, "yaw_rps": 0.0, "stop": True, "reason": "starting"}
         self.state = {"step": 0, "brain_ms": 0.0, "mode": mode, "setup_s": round(time.time() - t, 1),
                       "mapped_neurons": int(self.cmap.n_mapped), "graph_sha": self._sha(graph),
-                      "columns_sha": self.cmap.sha, "columns_from_graph": self.cmap.source_graph_sha}
+                      "columns_sha": self.cmap.sha, "columns_from_graph": self.cmap.source_graph_sha, "hz_per_unit": hz}
         self.fired_sample = np.zeros(0, np.int32)
         self.protocol = Protocol(trials_per_condition=0)
         self.stim = {"kind": "grey", "trial": None, "phase": "idle", "condition": None}
