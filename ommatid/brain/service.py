@@ -139,7 +139,7 @@ class BrainService:
             cmd["reason"] = seen; cmd["step"] = self.state["step"] + 1; cmd["ts"] = time.time()
             wall = time.perf_counter() - t0
             dil = wall / (STEPS * self.brain.p.dt / 1000)
-            stim = self.protocol.tick(self.brain.t_ms, dil)
+            stim = self.protocol.tick(self.brain.t_ms, dil, frame_ok=(seen == "live"))
             with self.lock:
                 self.stim = stim
                 self.command = cmd
@@ -160,7 +160,7 @@ class BrainService:
                           "spikes": r["total"], "fired": int(len(r["fired"])),
                           **{f"hz_{k}": v for k, v in hz.items()}, "cmd_linear": cmd["linear_mps"], "cmd_yaw": cmd["yaw_rps"],
                           "cmd_stop": cmd["stop"], "stim_kind": stim.get("kind"), "stim_trial": stim.get("trial"),
-                          "stim_condition": stim.get("condition"), "stim_phase": stim.get("phase"),
+                          "stim_condition": stim.get("condition"), "stim_phase": stim.get("phase"), "protocol_version": stim.get("version"),
                           "stim_t_ms": stim.get("t_brain_ms"), "protocol_seed": self.protocol.seed if self.protocol.active else None,
                           **{f"body_{k}": v for k, v in body.items() if isinstance(v, (int, float, str, bool))}})
 
@@ -206,7 +206,7 @@ def make_app(svc: BrainService, token: str) -> web.Application:
         return web.Response(body=code.tobytes(), content_type="application/octet-stream",
                             headers={"Cache-Control": "public, max-age=86400"})
 
-    STIM_PAGE_VERSION = 2          # bump when site/stimulus.html changes; the page reloads itself when it sees a newer version
+    STIM_PAGE_VERSION = 3          # bump when site/stimulus.html changes; the page reloads itself when it sees a newer version
 
     async def stim_state(req):
         with svc.lock: st = dict(svc.stim)

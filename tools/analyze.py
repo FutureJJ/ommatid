@@ -116,14 +116,14 @@ def report(t_all, ctrl_all=None, mode="v1"):
     lo_ = t[t.condition == "loom"]
     if len(lo_):
         print("H2 looming, each control separately (fraction of trials with escape/stop rise > 5 Hz — a threshold NOT in the v1 freeze):")
-        for c in ["loom", "disc", "grating_R", "grating_L", "grey", "bright_R", "bright_L"]:
+        for c in ["loom", "disc", "recede", "grating_R", "grating_L", "grey", "bright_R", "bright_L"]:
             g = t[t.condition == c]
             if len(g): print(f"    {c:10s} {(g.d_escape>5).mean()*100:4.0f}%  mean {g.d_escape.mean():+5.1f} Hz   loom vs this: p = {perm_test(lo_.d_escape, g.d_escape) if c != 'loom' else float('nan'):.4f}")
         for k in ESCAPE:
             lo, hi = ci(lo_[f"d_{k}"]); print(f"    loom Δ{k}: {lo_[f'd_{k}'].mean():+.1f} Hz [{lo:+.1f}, {hi:+.1f}]")
         if mode == "v2":
             print(f"    onset ≤ {ONSET_LIMIT_MS:.0f} ms (2 consecutive steps > baseline mean + 2 SD): {lo_.h2_onset_ok.mean()*100:.0f}% of loom trials (≥ 70% required); "
-                  f"controls: " + ", ".join(f"{c} {t[t.condition==c].h2_onset_ok.mean()*100:.0f}%" for c in ["disc", "grating_R", "grating_L", "grey"] if len(t[t.condition==c])) + " (< 20% each required)")
+                  f"controls: " + ", ".join(f"{c} {t[t.condition==c].h2_onset_ok.mean()*100:.0f}%" for c in ["disc", "recede", "grating_R", "grating_L", "grey"] if len(t[t.condition==c])) + " (< 20% each required)")
         if ctrl is not None:
             clo = ctrl[ctrl.condition == "loom"]
             print(f"    loom escape rise, this graph vs control graph: {lo_.d_escape.mean():+.1f} vs {clo.d_escape.mean():+.1f} Hz, p = {perm_test(lo_.d_escape, clo.d_escape):.4f} "

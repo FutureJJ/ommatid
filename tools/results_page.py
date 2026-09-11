@@ -10,9 +10,10 @@ from tools.analyze import load, per_trial, ci, perm_test
 
 ROOT = Path(__file__).resolve().parent.parent
 INK, INK2, INK3, LINE, EYE = "#16140f", "#5a554b", "#948e82", "rgba(22,20,15,.14)", "#c9321f"
-COND_LABEL = {"loom": "looming disc", "disc": "static disc", "grating_R": "grating → right", "grating_L": "grating → left",
+COND_LABEL = {"loom": "looming disc", "disc": "static disc", "recede": "receding disc", "grating_R": "grating → right", "grating_L": "grating → left",
               "bright_R": "bright right half", "bright_L": "bright left half", "grey": "grey"}
-ORDER = ["loom", "disc", "grating_R", "grating_L", "bright_R", "bright_L", "grey"]
+ORDER_ALL = ["loom", "disc", "recede", "grating_R", "grating_L", "bright_R", "bright_L", "grey"]
+ORDER = ["loom", "disc", "grating_R", "grating_L", "bright_R", "bright_L", "grey"]   # v1 runs had no 'recede' 
 
 
 def pfmt(p, rel=False):

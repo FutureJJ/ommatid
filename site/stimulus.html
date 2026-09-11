@@ -17,7 +17,7 @@ canvas{display:block;width:100vw;height:100vh}
 // Full-screen stimulus display for the fly. Shows exactly what the brain server says is current; nothing else.
 // Press "i" to toggle a small info overlay (for the experimenter, not for the fly). Click for fullscreen.
 const cv = document.getElementById('c'), ctx = cv.getContext('2d'), info = document.getElementById('info');
-const PAGE_VERSION = 2;   // must match STIM_PAGE_VERSION in the brain service
+const PAGE_VERSION = 3;   // must match STIM_PAGE_VERSION in the brain service
 let spec = {kind: 'grey'}, lastFetch = 0, fails = 0, showInfo = false, frames = 0, shownKey = '';
 function size(){ cv.width = innerWidth * devicePixelRatio; cv.height = innerHeight * devicePixelRatio; }
 addEventListener('resize', size); size();
@@ -39,15 +39,17 @@ function draw(){
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#000';
     for (let x = -period + shift; x < W + period; x += period) ctx.fillRect(x, 0, period / 2, H);
   } else if (spec.kind === 'disc') {
+    // contrast c: 1 = black disc on white; c < 1 = disc fading in from the white background (v2 static-disc control)
+    const c = spec.contrast == null ? 1 : Math.max(0, Math.min(1, spec.contrast)); const v = Math.round(255 * (1 - c));
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(W / 2, H / 2, (spec.size || 0) * H / 2, 0, 6.2832); ctx.fill();
+    ctx.fillStyle = `rgb(${v},${v},${v})`; ctx.beginPath(); ctx.arc(W / 2, H / 2, (spec.size || 0) * H / 2, 0, 6.2832); ctx.fill();
   } else if (spec.kind === 'half') {
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = '#fff'; if (spec.bright === 'R') ctx.fillRect(W / 2, 0, W / 2, H); else ctx.fillRect(0, 0, W / 2, H);
   }
   frames++;
   // report what is actually on screen the first frame it appears (trial / phase / kind), with the display's clock
-  const key = `${spec.trial}|${spec.phase}|${spec.kind}|${spec.bright||''}`;
+  const key = `${spec.trial}|${spec.phase}|${spec.kind}|${spec.bright||''}|${spec.condition||''}`;
   if (key !== shownKey) { shownKey = key;
     fetch('/stimulus/ack', {method: 'POST', headers: {'Content-Type': 'application/json'}, keepalive: true,
       body: JSON.stringify({client_ts: Date.now()/1000, kind: spec.kind, trial: spec.trial ?? null, condition: spec.condition ?? null, phase: spec.phase ?? null, t_brain_ms: spec.t_brain_ms ?? null})}).catch(()=>{}); }
