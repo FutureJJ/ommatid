@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ommatid</title>
 <meta name="description" content="A real fruit-fly nervous system, simulated neuron by neuron, given a six-legged metal body. Live.">
-<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/style.css?v=5">
 </head>
 <body>
 <div class="page">
@@ -146,7 +146,7 @@ function draw(){
   if (!base) return;
   ctx.clearRect(0,0,W,H); ctx.drawImage(base, 0, 0, W, H);
   const n = lit.length; ctx.fillStyle = RED;
-  for (let i=0;i<n;i++){ const l = lit[i]; if (l<=0.03) continue; const x=proj[2*i]; if (x<0){lit[i]=0;continue;} ctx.globalAlpha = Math.min(1,l); const r = 1.2+1.4*l; ctx.fillRect(x-r/2, proj[2*i+1]-r/2, r, r); lit[i] = l*0.82; }
+  for (let i=0;i<n;i++){ const l = lit[i]; if (l<=0.03) continue; const x=proj[2*i]; if (x<0){lit[i]=0;continue;} ctx.globalAlpha = Math.min(1,l)*0.9; const r = 1+1.2*l; ctx.fillRect(x-r/2, proj[2*i+1]-r/2, r, r); lit[i] = l*0.80; }
   ctx.globalAlpha = 1; requestAnimationFrame(draw);
 }
 window.addEventListener('resize', () => { layout(); stripLayout(); });
@@ -202,7 +202,11 @@ function apply(s){
   camLive = (s.seen==='live');
   $('livetext').textContent = s.seen==='live' ? 'live' : (s.seen==='blind' ? 'blind (control)' : 'no frame');
   $('tb-step').textContent = s.step ?? '—'; $('tb-time').textContent = fmt(s.brain_ms/1000,1)+' s'; $('tb-dil').textContent = fmt(s.dilation,1)+'×';
-  if (s.fired_sample && lit.length){ for (const i of s.fired_sample) lit[i] = 1; }
+  if (s.fired_sample && lit.length){
+    // on a small canvas 3000 red points would paint the whole specimen: keep the sample proportional to the area
+    const cap = Math.max(200, Math.floor(W*H/260)); const f = s.fired_sample; const step = Math.max(1, Math.ceil(f.length/cap));
+    for (let j=0; j<f.length; j+=step) lit[f[j]] = 1;
+  }
   if (s.eye){ drawEye($('eyeR'), s.eye[0], false); drawEye($('eyeL'), s.eye[1], true); }
   const sm = s.smoothed || {}, now = Date.now();
   for (const [k] of TRACES){ if (sm[k]!=null){ const h = hist[k]; h.push([now, sm[k]]); while (h.length && now-h[0][0] > SPAN+2000) h.shift(); } }
