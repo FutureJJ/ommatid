@@ -1,0 +1,9 @@
+[project]
+name = "ommatid"
+version = "0.1.0"
+description = "A real fruit-fly connectome driving a hexapod body."
+requires-python = ">=3.12"
+dependencies = ["numpy", "scipy", "numba", "pandas", "pyarrow"]
+
+[tool.setuptools.packages.find]
+include = ["ommatid*"]
