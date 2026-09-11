@@ -31,8 +31,8 @@ header nav a:hover{color:var(--ink)}
 .live.on i{background:var(--eye);box-shadow:0 0 0 3px rgba(212,67,44,.18)}
 main{display:grid;grid-template-columns:minmax(0,1fr) 420px;min-height:calc(100vh - 56px)}
 @media (max-width:980px){main{grid-template-columns:1fr}}
-#map-wrap{position:relative;border-right:1px solid var(--line);min-height:420px}
-@media (max-width:980px){#map-wrap{border-right:0;border-bottom:1px solid var(--line);height:70vh}}
+#map-wrap{position:sticky;top:0;height:calc(100vh - 56px);min-height:420px;border-right:1px solid var(--line);align-self:start}
+@media (max-width:980px){#map-wrap{position:relative;border-right:0;border-bottom:1px solid var(--line);height:70vh}}
 #map{position:absolute;inset:0;width:100%;height:100%;display:block}
 .legend{position:absolute;left:18px;bottom:16px;color:var(--ink2);font-family:var(--mono);font-size:12px;line-height:1.7}
 .legend b{color:var(--ink);font-weight:500}
@@ -81,7 +81,7 @@ footer a{color:var(--ink2);border:0}
 <main>
   <div id="map-wrap">
     <canvas id="map"></canvas>
-    <div class="caption" id="caption">165,122 neurons of one male <i>Drosophila melanogaster</i>, drawn at the measured position of each cell body. Red: fired in the last 20 ms of the fly's time.</div>
+    <div class="caption" id="caption">165,122 neurons of one male <i>Drosophila melanogaster</i>, drawn at the measured position of each cell body. Red: a sample of the cells that fired in the last 20 ms of the fly's time.</div>
     <div class="legend" id="legend"></div>
   </div>
 
@@ -192,7 +192,7 @@ function draw(){
   if (!base) return;
   ctx.drawImage(base, 0, 0, W, H);
   const n = lit.length; ctx.fillStyle = '#d4432c';
-  for (let i=0;i<n;i++){ const l = lit[i]; if (l<=0.02) continue; const x=proj[2*i]; if (x<0){lit[i]=0;continue;} ctx.globalAlpha = Math.min(1,l); const r = 1+1.6*l; ctx.fillRect(x-r/2, proj[2*i+1]-r/2, r, r); lit[i] = l*0.86; }
+  for (let i=0;i<n;i++){ const l = lit[i]; if (l<=0.02) continue; const x=proj[2*i]; if (x<0){lit[i]=0;continue;} ctx.globalAlpha = Math.min(1,l); const r = 1+1.0*l; ctx.fillRect(x-r/2, proj[2*i+1]-r/2, r, r); lit[i] = l*0.80; }
   ctx.globalAlpha = 1;
   requestAnimationFrame(draw);
 }
