@@ -31,6 +31,7 @@ from servo_controller_msgs.msg import ServoPosition, ServosPosition
 BRAIN_URL = os.environ.get("OMMATID_BRAIN_URL", "https://ommatid.org/body/frame")
 TOKEN = os.environ.get("OMMATID_TOKEN", "")
 PERIOD_S = float(os.environ.get("OMMATID_PERIOD_S", "0.1"))
+SENDERS = int(os.environ.get("OMMATID_SENDERS", "3"))       # parallel connections: the Wi-Fi round trip (~200 ms) exceeds the frame period
 LEASE_S = 0.5                 # motion lease: newest advancing command must be younger than this
 SCAN_FRESH_S = 1.0
 OBSTACLE_STOP_M = 0.20
@@ -64,11 +65,13 @@ class Body(Node):
         self.pub_action = self.create_publisher(RunActionSet, "/controller/run_actionset", 5)
         self.pub_servo = self.create_publisher(ServosPosition, "/servo_controller", 5)
         self.moving = False
-        self.conn = None                      # persistent HTTPS connection to the brain (a new TLS handshake per frame cost ~0.6 s)
+        self.frame_lock = threading.Lock()    # sender threads take turns so frames leave PERIOD_S apart
         self._halt()
         self._cam_timer = self.create_timer(2.0, self._aim_camera_once)
         self.create_timer(0.1, self._drive)
-        threading.Thread(target=self._sender, name="brain-sender", daemon=True).start()
+        self.next_send = time.time()
+        for i in range(SENDERS):
+            threading.Thread(target=self._sender, name=f"brain-sender-{i}", daemon=True).start()
 
     # ---- sensors ----------------------------------------------------------------
     def _on_rgb(self, m):
@@ -109,16 +112,23 @@ class Body(Node):
         return buf.tobytes() if ok else None
 
     def _sender(self):
+        """Each sender owns one persistent connection; a shared schedule spaces departures PERIOD_S apart, so with
+        SENDERS connections frames keep flowing at the period even when one round trip takes longer than it."""
+        conn = [None]
         while rclpy.ok():
-            t0 = time.time()
+            with self.frame_lock:
+                wait = self.next_send - time.time()
+                self.next_send = max(self.next_send, time.time()) + PERIOD_S
+            if wait > 0: time.sleep(wait)
             try:
-                self._send_once()
+                self._send_once(conn)
             except Exception as e:
                 self.stats["errors"] += 1; self.stats["last_error"] = str(e)[:120]
-            time.sleep(max(0.0, PERIOD_S - (time.time() - t0)))
 
-    def _send_once(self):
+    def _send_once(self, conn):
+        t_enc = time.time()
         jpeg = self._jpeg()
+        self.stats["encode_ms"] = round((time.time() - t_enc) * 1000)
         if jpeg is None or time.time() - self.rgb_ts > 1.0:
             return
         tele = {"ts": time.time(), "capture_ts": self.rgb_stamp, "capture_age_ms": round((time.time() - self.rgb_ts) * 1000, 1),
@@ -126,26 +136,27 @@ class Body(Node):
                 "lidar_age_ms": round((time.time() - self.scan_ts) * 1000) if self.scan_ts else None, "lidar": self.scan_meta,
                 "frames": self.stats["frames"], "lease_stops": self.stats["lease_stops"], "obstacle_blocks": self.stats["obstacle_blocks"],
                 "stale_cmds": self.stats["stale_cmds"], "moving": self.moving, "errors": self.stats["errors"],
-                "last_error": self.stats["last_error"], "post_ms": self.stats.get("post_ms"), "reconnects": self.stats.get("reconnects", 0)}
+                "last_error": self.stats["last_error"], "post_ms": self.stats.get("post_ms"), "send_ms": self.stats.get("send_ms"), "encode_ms": self.stats.get("encode_ms"), "reconnects": self.stats.get("reconnects", 0)}
         u = urlsplit(BRAIN_URL)
-        if self.conn is None:
+        if conn[0] is None:
             self.stats["reconnects"] = self.stats.get("reconnects", 0) + 1
-            self.conn = (http.client.HTTPSConnection(u.hostname, u.port or 443, timeout=1.5, context=ssl.create_default_context())
-                         if u.scheme == "https" else http.client.HTTPConnection(u.hostname, u.port or 80, timeout=1.5))
+            conn[0] = (http.client.HTTPSConnection(u.hostname, u.port or 443, timeout=1.5, context=ssl.create_default_context())
+                       if u.scheme == "https" else http.client.HTTPConnection(u.hostname, u.port or 80, timeout=1.5))
         t_post = time.time()
         try:
-            self.conn.request("POST", u.path, body=jpeg,
+            conn[0].request("POST", u.path, body=jpeg,
                               headers={"Content-Type": "image/jpeg", "Authorization": f"Bearer {TOKEN}", "User-Agent": "Ommatid-Body/0.3",
                                        "X-Ommatid-Telemetry": json.dumps(tele), "Connection": "keep-alive"})
-            resp = self.conn.getresponse(); data = resp.read()
+            self.stats["send_ms"] = round((time.time() - t_post) * 1000)
+            resp = conn[0].getresponse(); data = resp.read()
             if resp.status != 200:
                 raise RuntimeError(f"brain HTTP {resp.status}")
             cmd = json.loads(data)
             self.stats["post_ms"] = round((time.time() - t_post) * 1000)
         except Exception:
-            try: self.conn.close()
+            try: conn[0].close()
             except Exception: pass
-            self.conn = None
+            conn[0] = None
             raise
         now = time.time()
         with self.lock:
