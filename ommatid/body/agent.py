@@ -25,7 +25,6 @@ from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Image, Imu, LaserScan
 from std_msgs.msg import UInt16
 from kinematics_msgs.msg import Traveling
-from interfaces.msg import RunActionSet
 from servo_controller_msgs.msg import ServoPosition, ServosPosition
 
 BRAIN_URL = os.environ.get("OMMATID_BRAIN_URL", "https://ommatid.org/body/frame")
@@ -62,7 +61,6 @@ class Body(Node):
         self.create_subscription(UInt16, "/ros_robot_controller/battery", self._on_batt, 5)
         self.pub_vel = self.create_publisher(Twist, "/controller/cmd_vel", 5)
         self.pub_travel = self.create_publisher(Traveling, "/controller/traveling", 5)
-        self.pub_action = self.create_publisher(RunActionSet, "/controller/run_actionset", 5)
         self.pub_servo = self.create_publisher(ServosPosition, "/servo_controller", 5)
         self.moving = False
         self.frame_lock = threading.Lock()    # sender threads take turns so frames leave PERIOD_S apart
@@ -95,10 +93,13 @@ class Body(Node):
         self.scan_meta = {"angle_min": round(m.angle_min, 3), "angle_max": round(m.angle_max, 3), "n": n, "front_beams": len(front)}
 
     def _aim_camera_once(self):
+        self._aim_camera(); self.destroy_timer(self._cam_timer)
+        self.create_timer(30.0, self._aim_camera)      # and re-assert every 30 s in case the stock stack moved the arm
+
+    def _aim_camera(self):
         m = ServosPosition(); m.duration = 1.0; m.position_unit = "pulse"
         m.position = [ServoPosition(id=22, position=float(clamp(CAM_TILT, 0, 1000)))]
         self.pub_servo.publish(m); self.stats["cam_tilt"] = CAM_TILT
-        self.destroy_timer(self._cam_timer)
 
     # ---- brain link (own thread) -----------------------------------------------
     def _jpeg(self):
@@ -170,10 +171,10 @@ class Body(Node):
 
     # ---- motion (ROS timer, never blocks) ----------------------------------------
     def _halt(self):
+        """Stop the gait engine: Traveling gait=0. NOT the stock 'stop' action group — that one also returns the arm
+        (and with it the camera) to the rest pose, pointing it at the floor."""
         m = Traveling(); m.gait = 0; m.interrupt = True
         self.pub_travel.publish(m)
-        a = RunActionSet(); a.action_path = "stop"
-        self.pub_action.publish(a)
         self.moving = False
 
     def _drive(self):
