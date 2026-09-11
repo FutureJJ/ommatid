@@ -126,3 +126,16 @@ DNp01, DNp09, MDN 0 Hz in every trial. Original vs shuffled loom rise +13.6 vs +
 - **Run 3 stopped at trial 34/210 (12:53 UTC).** With scrambled signs the network is ~5× more active and the simulation ran at
   8× dilation; more importantly the run carried the input-mapping confound (review finding 1), so it could only be exploratory.
   Its 34 trials are kept in `runs/data/scrambled-aborted/` and not analysed. C2 is rerun under protocol v2 with the fixed map.
+
+### The surround artefact (2026-09-11, after review finding 6)
+With the off-camera surround fixed at 50 % grey, the synthetic hybrid pilot (`tools/pilot_hybrid.py`) no longer produces
+an escape response: the expanding disc drives LC4 to 2 Hz (13 % of cells) and DNp04/DNp02 to 0 Hz, where the frame-mean
+surround had given LC4 12 Hz and DNp04 41 Hz. A first frame-locked smoke run on the robot with the fixed surround (seed 8,
+one trial per condition) likewise shows DNp04 at 0 Hz in every phase of every trial, including looming.
+
+Interpretation: the v1 "escape response" — to the expanding disc and equally to the static disc — was mostly the model's
+response to a whole-eye dimming that the surround fill manufactured whenever a dark object entered the camera frame. It was
+not a response to expansion, and with the artefact removed the looming pathway is only weakly driven by a 24° disc that
+covers a fraction of one eye. Phase 1 v1 therefore establishes no reflex. This is now the stated status of the project.
+What v2 has to settle first: whether the hand-off gain (calibrated to HS-cell physiology, pre-registered) and a larger
+stimulus can drive LC4 at all; if not, that is the phase-1 result about this model class in this body.
