@@ -96,3 +96,13 @@ footer a{border:0;color:var(--ink2)}
 .stamp{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;padding:2px 8px;border:1.5px solid currentColor;display:inline-block}
 .stamp.met{color:var(--red)} .stamp.miss{color:var(--ink3)}
 figure{margin:0}
+
+/* donations */
+.wallets{display:grid;gap:12px}
+.wallets .w{display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center;border:1px solid var(--grid2);padding:10px 12px;background:var(--paper2)}
+.wallets .w small{grid-column:1/-1;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
+.wallets code{font-family:var(--mono);font-size:12.5px;word-break:break-all;color:var(--ink)}
+.wallets button{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;border:1.5px solid var(--ink);background:var(--paper);color:var(--ink);padding:5px 10px;cursor:pointer}
+.wallets button:hover{background:var(--ink);color:var(--paper)}
+.wallets .empty code{color:var(--ink3)}
+.wallets .note{grid-column:1/-1;font-size:13px;color:var(--ink2);font-style:italic}

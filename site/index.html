@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ommatid</title>
 <meta name="description" content="A real fruit-fly nervous system, simulated neuron by neuron, given a six-legged metal body. Live.">
-<link rel="stylesheet" href="/style.css?v=6">
+<link rel="stylesheet" href="/style.css?v=7">
 </head>
 <body>
 <div class="page">
@@ -19,7 +19,7 @@
     <div class="cell"><small>time dilation</small><b id="tb-dil">—</b></div>
   </div>
 </div>
-<nav class="tabs"><a class="on" href="/">Live</a><a href="/results">Results</a><a href="#about">What this is</a><a href="#honesty">What is real</a><a href="https://github.com/FutureJJ/ommatid">Source</a></nav>
+<nav class="tabs"><a class="on" href="/">Live</a><a href="/results">Results</a><a href="#about">What this is</a><a href="#honesty">What is real</a><a href="#support">Support</a><a href="https://github.com/FutureJJ/ommatid">Source</a></nav>
 
 <div class="live-grid">
   <div class="stack">
@@ -98,6 +98,22 @@
   </table></div>
   <p>The brain runs slower than the animal's: one 20 ms step of the fly's time takes about 100 ms of ours; the dilation is in the title block. The full design is in <a href="https://github.com/FutureJJ/ommatid/blob/main/docs/experiment.md">docs/experiment.md</a>, what broke on the way in <a href="https://github.com/FutureJJ/ommatid/blob/main/docs/model.md">docs/model.md</a>.</p>
 </section>
+
+<section class="prose" id="support" style="margin-top:40px">
+  <h2>Support</h2>
+  <p>Ommatid runs on one rented server and one robot in a flat. Donations pay for compute and hardware; nothing else. Addresses are below; copy with the button. There is no token yet, and the field for it stays empty until there is.</p>
+</section>
+<figure class="plate" style="max-width:820px;margin:16px auto 0">
+  <header><span class="t"><b>Plate X</b> — donations</span> <span>compute and hardware only</span></header>
+  <div class="body">
+    <div class="wallets" id="wallets">
+      <div class="w"><small>Ethereum · Base · Robinhood Chain (EVM)</small><code>0x979e18D90750919bFD149eabBD3B399f2aA4A3c8</code><button data-copy="0x979e18D90750919bFD149eabBD3B399f2aA4A3c8" aria-label="copy">copy</button></div>
+      <div class="w"><small>Solana</small><code>9dKxmbuShuYqoFjgXhBCEPrMQLc9kAStpwfTwjDZ1RjA</code><button data-copy="9dKxmbuShuYqoFjgXhBCEPrMQLc9kAStpwfTwjDZ1RjA" aria-label="copy">copy</button></div>
+      <div class="w"><small>Bitcoin</small><code>bc1qxrzldudjyjrhp0jr07u9x92ujgm9wmu0s9eehx</code><button data-copy="bc1qxrzldudjyjrhp0jr07u9x92ujgm9wmu0s9eehx" aria-label="copy">copy</button></div>
+      <div class="w empty"><small>$OMMATID contract</small><code>— none yet —</code><span class="note">If a token ever exists, its contract address appears here and nowhere else. Anything claiming to be $OMMATID before that is not ours.</span></div>
+    </div>
+  </div>
+</figure>
 
 <footer>
   <span>Connectome: FlyEM male CNS v1.0 · HHMI Janelia, Cambridge Connectomics Group, Google Research · CC-BY</span>
@@ -231,6 +247,13 @@ function connect(){
   ws.onerror = () => ws.close();
 }
 connect();
+// ---------- Plate X: copy buttons ----------
+for (const b of document.querySelectorAll('#wallets button[data-copy]')) {
+  b.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'copied'; setTimeout(() => b.textContent = 'copy', 1400); }
+    catch (e) { b.textContent = 'select it'; setTimeout(() => b.textContent = 'copy', 1400); }
+  });
+}
 })();
 </script>
 </body>
