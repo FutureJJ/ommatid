@@ -180,3 +180,19 @@ the loom vs 12 in the settle window; at 800, 491 vs 67 — the response appears,
 Reading: the pathway is there, but under a single global scalar the injected medulla activity leaves LC4 under net inhibition;
 a looming response would require either a higher gain (which also raises the background) or a per-type scaling of FlyVis
 activity (its units are not comparable across types). Both are v3 design questions, to be pre-registered before any trial.
+
+### v2 attempt 2 stopped by the operator at trial 107/240 (14:52 UTC) — moving to phase 2
+Decision (Can): with the escape readouts flat under the frozen gain, the remaining control runs had no contrast to test.
+Data kept in `runs/data/original-v2-41deg-107trials/` (108 valid trials, 0 interruptions), exploratory:
+
+| condition | n | Δ turn (DNa02 R−L) Hz | Δ escape Hz |
+|---|---|---|---|
+| grating → R / → L | 17 / 20 | +6.0 / +5.6 | 0 / 0 |
+| bright R / L | 14 / 10 | +7.4 / +3.8 | 0 / 0 |
+| loom / fade-in disc / recede | 12 / 13 / 9 | +2.9 / +2.7 / +4.5 | 0 / 0 / 0 |
+| grey | 13 | +0.2 | 0 |
+
+Every stimulus — regardless of direction or kind — shifts the steering readout to the right by 3–7 Hz while grey does
+not: a non-specific onset response in the right DNa02, not a directional one. H1 46 %, H3 67 %, H2 0 %. The looming
+detectors did not fire in any trial at 41° × 30°. This closes phase 1 v2 as an exploratory record; phase 2 (the nerve cord
+drives and feels the legs) starts next, with its own pre-registration.
