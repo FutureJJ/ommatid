@@ -235,7 +235,7 @@ for (const [leg, side, lab] of LEGS){
   jroot.insertAdjacentHTML('beforeend', `<div class="lg">${lab}</div>` + JOINTS.map(j=>`<div class="j" id="j_${leg}_${side}_${j}"><div class="bar"><u></u><i></i><em></em></div><small>—</small><b>—</b></div>`).join(''));
 }
 // glyph: leg roots on the thorax, top view; each leg = coxa segment + femur/tibia segment, drawn from the standing pose
-const ROOT = {front:[60,44,-58], mid:[60,78,-90], hind:[60,112,-124]};   // x, y, angle of the left leg (deg, screen: 0 = +x, 90 = down)
+const ROOT = {front:[44,-148], mid:[78,180], hind:[112,148]};   // y on the thorax, angle of the LEFT leg (screen deg: 0 = +x, 90 = down)
 const hl = $('hexa-legs'), hlab = $('hexa-labels');
 const legEls = {};
 for (const [leg, side, lab] of LEGS){
@@ -243,11 +243,12 @@ for (const [leg, side, lab] of LEGS){
   const t = document.createElementNS('http://www.w3.org/2000/svg','text'); t.textContent = lab; hlab.appendChild(t); legEls[leg+side+'t'] = t;
 }
 function legPath(leg, side, coxaDeg, femurDeg){
-  const [x0, y0, a0] = ROOT[leg]; const sgn = side==='L' ? -1 : 1;
-  const a = (side==='L' ? a0 : 180 - a0) + sgn*(-coxaDeg);             // coxa yaw swings the leg fore/aft
-  const r1 = 14, r2 = 24 * Math.max(0.35, Math.cos(femurDeg*Math.PI/180)); // femur pitch foreshortens the outer segment in top view
+  const [y0, a0] = ROOT[leg]; const sgn = side==='L' ? -1 : 1;
+  const x0 = 60 + sgn*14*Math.sqrt(Math.max(0, 1 - ((y0-78)/42)**2));      // root on the thorax outline
+  const a = (side==='L' ? a0 : 180 - a0) - sgn*coxaDeg;                    // coxa promotion swings the leg forward (up)
+  const r1 = 13, r2 = 22 * Math.max(0.35, Math.cos(femurDeg*Math.PI/180)); // femur pitch foreshortens the outer segment in top view
   const rad = a*Math.PI/180, x1 = x0 + Math.cos(rad)*r1, y1 = y0 + Math.sin(rad)*r1;
-  const rad2 = (a + sgn*20)*Math.PI/180, x2 = x1 + Math.cos(rad2)*r2, y2 = y1 + Math.sin(rad2)*r2;
+  const rad2 = (a + sgn*22)*Math.PI/180, x2 = x1 + Math.cos(rad2)*r2, y2 = y1 + Math.sin(rad2)*r2;
   return [[x0,y0],[x1,y1],[x2,y2]];
 }
 let servoTab = null;
@@ -277,7 +278,7 @@ function drawLegs(s){
     const el = legEls[leg+side]; el.setAttribute('points', pts.map(p=>p.join(',')).join(' '));
     const act = JOINTS.reduce((a,j)=>{ const q = pools[`${leg}-${side}-${j}`]||[0,0]; return a + q[0] + q[1]; }, 0);
     el.setAttribute('stroke', act > 30 ? RED : INK); el.setAttribute('stroke-opacity', String(Math.min(1, 0.35 + act/300)));
-    const t = legEls[leg+side+'t']; const [x,y] = pts[2]; t.setAttribute('x', x + (side==='L' ? -9 : 3)); t.setAttribute('y', y + 3);
+    const t = legEls[leg+side+'t']; const [x,y] = pts[2]; t.setAttribute('x', x + (side==='L' ? -10 : 3)); t.setAttribute('y', y + 2);
   }
 }
 

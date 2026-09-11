@@ -24,13 +24,18 @@ mind when its body changes.
 
 ## Status (11 September 2026)
 
-Phase 1, protocol v1, is complete and none of the pre-registered hypotheses is established. Looming raised the escape
-descending neurons DNp04/DNp02 and did so less on shuffled wiring; this is exploratory because the control also changed
-the input mapping and the criteria were not implemented as written. An independent review's findings and the fixes are
-in `docs/runs.md`; v2 follows.
+Phase 1 is closed: protocol v1 (210 trials) established none of the three pre-registered reflexes, and its apparent looming
+response was traced to an input artefact after an independent review; protocol v2 (frame-locked, calibrated gain) ran 108
+valid trials before being stopped — every stimulus shifted the steering readout the same way, the looming detectors stayed
+silent under the frozen gain. Both are recorded in `docs/runs.md` and on the results page, with the corrections.
+
+Phase 2 is wired and live in dry run: the nerve cord's 266 leg motor neurons compute targets for the 18 servos every step
+(shown on the site, Plate VII), and the robot's joint positions feed 563 of the fly's own proprioceptors. Its first
+measurement, P2-a, is pre-registered (`docs/phase2.md` §10, tag `freeze-p2a`) and waits for a still body. Nothing has been
+learned or tuned; the motto changes only in phase 3.
 
 ## Layout
-- `ommatid/brain/` — connectome graph, LIF kernel (numba), eye, descending-neuron readout
+- `ommatid/brain/` — connectome graph, LIF kernel (numba), eye, FlyVis optic lobe, descending-neuron readout, leg motor pools (`motor.py`), proprioceptors (`proprio.py`), the service
 - `ommatid/body/` — Raspberry Pi side: camera, gait commands, reflexes
 - `ommatid/stream/` — telemetry websocket and the public site
 - `tools/build_graph.py` — builds `build/graph.npz` from the CC-BY connectome files in `data/`

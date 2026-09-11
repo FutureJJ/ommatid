@@ -196,3 +196,20 @@ Every stimulus — regardless of direction or kind — shifts the steering reado
 not: a non-specific onset response in the right DNa02, not a directional one. H1 46 %, H3 67 %, H2 0 %. The looming
 detectors did not fire in any trial at 41° × 30°. This closes phase 1 v2 as an exploratory record; phase 2 (the nerve cord
 drives and feels the legs) starts next, with its own pre-registration.
+
+## Phase 2 — pre-registration frozen, 2026-09-11 18:30 UTC (tag `freeze-p2a`)
+- `docs/phase2.md` §10 and `docs/frozen-params-p2.md`: P2-a in the dry run — original and C1-shuffled graphs, proprioceptive
+  feedback ON/OFF/ON/OFF at 150 s of brain time per arm, criterion "any motor unit's pool > 5 Hz with feedback on, original
+  graph"; on-vs-off and original-vs-shuffled reported with Holm correction over 18 units, no criterion.
+- Tooling: `POST /phase2/proprio` switches the feedback and is logged per step (`proprio_on`); the log now also carries the
+  reached servo positions (`reached_<id>`); `tools/run_p2a.py` runs the blocks unattended and aborts unless the body is in dry
+  run; `tools/analyze_phase2.py` finds the blocks from the logs themselves.
+- Site: Plate VII shows the 18 servo targets the nerve cord is computing (agonist − antagonist rate, ± 45° scale), the reached
+  position, and the pool rates, live.
+- **Not started.** The pre-registration requires the body to stand still, and the robot is currently running an operator-driven
+  leg demonstration for the stream (servos move by ≈ 9° every few seconds), which would feed moving joints into the "feedback on"
+  arm. The blocks (~100 min of wall time for both graphs) run when the demonstration is paused.
+- Tool check on 48 s of the live log (body moving, so exploratory, not a P2-a block): the same tonic pattern as §9 of the design
+  doc — mid-leg coxa promotors ≈ 142 Hz both sides, mid-leg tibia extensors 139–195 Hz, front-leg femur antagonists 19–37 Hz,
+  hind legs 7–29 Hz; 16 of 18 units above 5 Hz; 10 s window SDs ≤ 3 Hz (the pattern is steady, not rhythmic: no 0.2–2 Hz peak
+  exceeds 10× the band median).
